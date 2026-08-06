@@ -53,7 +53,7 @@ const BankDetail = {
         <button class="btn" :class="activeChart==='volume' ? 'btn-primary' : 'btn-outline'" @click="activeChart='volume'">签帐金额</button>
         <button class="btn" :class="activeChart==='risk' ? 'btn-primary' : 'btn-outline'" @click="activeChart='risk'">风险指标</button>
       </div>
-      <div class="chart-box" id="bank-chart"></div>
+      <div class="chart-box" id="bank-chart"></div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">💡 点击图表上的数据点可直接跳转至金管局对应月份的原始档案</div>
     </div>
 
     <!-- 卡产品 -->
@@ -147,7 +147,7 @@ const BankDetail = {
 
       if (activeChart.value === 'cards') {
         chart.setOption({
-          tooltip: { trigger: 'axis' },
+          tooltip: { trigger: 'axis', formatter: function(params) { var h = params.map(p => '<b>'+p.seriesName+'</b>: '+ (p.seriesName.includes('率') ? p.value?.toFixed(1)+'%' : (p.value||0).toLocaleString())).join('<br/>'); return h + '<br/><span style="color:#94a3b8;font-size:10px">🖱️ 点击跳转金管局原始档案</span>'; } },
           legend: { data: ['流通卡数', '有效卡数', '有效卡率'], top: 0 },
           grid: { left: 60, right: 60, top: 50, bottom: 30 },
           xAxis: { type: 'category', data: d.map(s => rocDate(s.report_month)), axisLabel: { rotate: 45, fontSize: 11 } },
@@ -163,7 +163,7 @@ const BankDetail = {
         })
       } else if (activeChart.value === 'volume') {
         chart.setOption({
-          tooltip: { trigger: 'axis' },
+          tooltip: { trigger: 'axis', formatter: function(params) { var h = params.map(p => '<b>'+p.seriesName+'</b>: '+ ((p.value||0)/1000).toLocaleString()+'千元').join('<br/>'); return h + '<br/><span style="color:#94a3b8;font-size:10px">🖱️ 点击跳转金管局原始档案</span>'; } },
           legend: { data: ['当月签帐金额', '预借现金金额'], top: 0 },
           grid: { left: 80, right: 20, top: 50, bottom: 30 },
           xAxis: { type: 'category', data: d.map(s => rocDate(s.report_month)), axisLabel: { rotate: 45, fontSize: 11 } },
@@ -175,7 +175,7 @@ const BankDetail = {
         })
       } else {
         chart.setOption({
-          tooltip: { trigger: 'axis' },
+          tooltip: { trigger: 'axis', formatter: function(params) { var h = params.map(p => '<b>'+p.seriesName+'</b>: '+ (p.value||0).toFixed(2)+'%').join('<br/>'); return h + '<br/><span style="color:#94a3b8;font-size:10px">🖱️ 点击跳转金管局原始档案</span>'; } },
           legend: { data: ['逾期3月+比率', '逾期6月+比率', '备抵呆帐提足率'], top: 0 },
           grid: { left: 60, right: 60, top: 50, bottom: 30 },
           xAxis: { type: 'category', data: d.map(s => rocDate(s.report_month)), axisLabel: { rotate: 45, fontSize: 11 } },
@@ -186,8 +186,15 @@ const BankDetail = {
             { name: '备抵呆帐提足率', type: 'line', data: d.map(s => s.bad_debt_coverage_ratio), smooth: true, lineStyle: { color: '#8b5cf6' } }
           ]
         })
-      }
-    }
+      
+      // 点击图表跳转来源 (只绑定一次)
+      chart.off('click')
+      chart.on('click', function(params) {
+        if (params.dataIndex != null && allStats.value[params.dataIndex]) {
+          var src = allStats.value[params.dataIndex].source_url
+          if (src) window.open(src, '_blank')
+        }
+      })
 
     function trendChange(field) {
       if (allStats.value.length < 2) return ''

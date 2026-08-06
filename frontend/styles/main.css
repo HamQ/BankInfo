@@ -225,3 +225,6 @@ td a:hover { text-decoration: underline; }
   color: var(--navy);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
+
+/* ── 图表可点击提示 ── */
+.chart-box { cursor: pointer; }
