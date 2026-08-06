@@ -77,7 +77,7 @@ const BankDetail = {
     <div class="card" v-if="digitalData.length">
       <h2>📱 数位存款帐户 (季度)
         <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px" v-if="digitalData[digitalData.length-1]?.source_url">
-          来源: <a :href="digitalData[digitalData.length-1].source_url.replace('.zip','.pdf')" target="_blank" style="color:var(--accent)">金管局</a>
+          来源: <a :href="digitalData[digitalData.length-1].source_url" target="_blank" style="color:var(--accent)">金管局</a>
         </span>
       </h2>
       <div class="chart-box" id="digital-chart" style="height:300px"></div>
@@ -87,7 +87,7 @@ const BankDetail = {
     <div class="card" v-if="nplData.length">
       <h2>⚠️ 逾放资料 (季度)
         <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px" v-if="nplData[nplData.length-1]?.source_url">
-          来源: <a :href="nplData[nplData.length-1].source_url.replace('.zip','.pdf')" target="_blank" style="color:var(--accent)">金管局</a>
+          来源: <a :href="nplData[nplData.length-1].source_url" target="_blank" style="color:var(--accent)">金管局</a>
         </span>
       </h2>
       <div class="chart-box" id="npl-chart" style="height:300px"></div>
@@ -201,7 +201,7 @@ const BankDetail = {
       chart.on('click', function(params) {
         if (params.dataIndex != null && allStats.value[params.dataIndex]) {
           var src = allStats.value[params.dataIndex].source_url
-          if (src) window.open(src.replace('.zip','.pdf'), '_blank')
+          if (src) window.open(src, '_blank')
         }
       })
     }
@@ -211,33 +211,45 @@ const BankDetail = {
       if (del && digitalData.value.length) {
         const dc = echarts.getInstanceByDom(del) || echarts.init(del, 'dark')
         dc.setOption({
-          tooltip: { trigger: 'axis' },
-          legend: { data: ['第一类', '第二类', '第三类'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+          tooltip: { trigger: "axis" },
+          legend: { data: ["第一类","第二类","第三类"], bottom: 0, textStyle: { color: "#94a3b8", fontSize: 10 } },
           grid: { left: 70, right: 20, top: 20, bottom: 40 },
-          xAxis: { type: 'category', data: digitalData.value.map(s => { const dt = new Date(s.report_quarter + 'T00:00:00'); return (dt.getFullYear()-1911)+'Q'+((dt.getMonth())/3+1) }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
-          yAxis: { type: 'value', name: '户数', axisLabel: { formatter: v => (v/10000).toFixed(0)+'万', fontSize: 10, color: '#94a3b8' } },
+          xAxis: { type: "category", data: digitalData.value.map(s => { const dt = new Date(s.report_quarter + "T00:00:00"); return (dt.getFullYear()-1911)+"Q"+(Math.floor(dt.getMonth()/3)+1) }), axisLabel: { fontSize: 10, color: "#94a3b8" } },
+          yAxis: { type: "value", name: "户数", axisLabel: { formatter: v => (v/10000).toFixed(0)+"万", fontSize: 10, color: "#94a3b8" } },
           series: [
-            { name: '第一类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type1_accounts), itemStyle: { color: '#38bdf8' } },
-            { name: '第二类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type2_accounts), itemStyle: { color: '#34d399' } },
-            { name: '第三类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type3_accounts), itemStyle: { color: '#a78bfa' } },
+            { name: "第一类", type: "bar", stack: "total", data: digitalData.value.map(s => s.type1_accounts), itemStyle: { color: "#38bdf8" } },
+            { name: "第二类", type: "bar", stack: "total", data: digitalData.value.map(s => s.type2_accounts), itemStyle: { color: "#34d399" } },
+            { name: "第三类", type: "bar", stack: "total", data: digitalData.value.map(s => s.type3_accounts), itemStyle: { color: "#a78bfa" } },
           ]
-        }, true)
+        }, true);
+        dc.off("click"); dc.on("click", function(params) {
+          if (params.dataIndex != null && digitalData.value[params.dataIndex]) {
+            var src = digitalData.value[params.dataIndex].source_url;
+            if (src) window.open(src, "_blank");
+          }
+        })
       }
 
       const nel = document.getElementById('npl-chart')
       if (nel && nplData.value.length) {
         const nc = echarts.getInstanceByDom(nel) || echarts.init(nel, 'dark')
         nc.setOption({
-          tooltip: { trigger: 'axis' },
-          legend: { data: ['逾放比率', '覆盖率'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+          tooltip: { trigger: "axis" },
+          legend: { data: ["逾放比率","覆盖率"], bottom: 0, textStyle: { color: "#94a3b8", fontSize: 10 } },
           grid: { left: 60, right: 60, top: 20, bottom: 40 },
-          xAxis: { type: 'category', data: nplData.value.map(s => { const dt = new Date(s.report_quarter + 'T00:00:00'); return (dt.getFullYear()-1911)+'Q'+((dt.getMonth())/3+1) }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
-          yAxis: { type: 'value', name: '%', axisLabel: { formatter: v => v+'%', fontSize: 10, color: '#94a3b8' } },
+          xAxis: { type: "category", data: nplData.value.map(s => { const dt = new Date(s.report_quarter + "T00:00:00"); return (dt.getFullYear()-1911)+"."+(dt.getMonth()+1).toString().padStart(2,"0") }), axisLabel: { fontSize: 10, color: "#94a3b8" } },
+          yAxis: { type: "value", name: "%", axisLabel: { formatter: v => v+"%", fontSize: 10, color: "#94a3b8" } },
           series: [
-            { name: '逾放比率', type: 'line', data: nplData.value.map(s => s.npl_ratio), smooth: true, lineStyle: { color: '#f87171', width: 2 }, itemStyle: { color: '#f87171' } },
-            { name: '覆盖率', type: 'line', data: nplData.value.map(s => s.coverage_ratio), smooth: true, lineStyle: { color: '#38bdf8', width: 2 }, itemStyle: { color: '#38bdf8' } },
+            { name: "逾放比率", type: "line", data: nplData.value.map(s => s.npl_ratio), smooth: true, lineStyle: { color: "#f87171", width: 2 }, itemStyle: { color: "#f87171" } },
+            { name: "覆盖率", type: "line", data: nplData.value.map(s => s.coverage_ratio), smooth: true, lineStyle: { color: "#38bdf8", width: 2 }, itemStyle: { color: "#38bdf8" } },
           ]
-        }, true)
+        }, true);
+        nc.off("click"); nc.on("click", function(params) {
+          if (params.dataIndex != null && nplData.value[params.dataIndex]) {
+            var src = nplData.value[params.dataIndex].source_url;
+            if (src) window.open(src, "_blank");
+          }
+        })
       }
     }
 
@@ -272,7 +284,7 @@ const BankDetail = {
 
     const sourcePdfUrl = Vue.computed(() => {
       const src = latest.value?.source_url
-      return src ? src.replace('.zip', '.pdf') : ''
+      return src ? src : ''
     })
 
     return {
