@@ -11,7 +11,7 @@ const Dashboard = {
         <div v-if="topCards.length">
           <div class="rank-item" v-for="(b, i) in topCards.slice(0,5)" :key="b.id">
             <span class="pos" :class="{gold:i===0,silver:i===1,bronze:i===2}">{{ i+1 }}</span>
-            <span class="name"><router-link :to="'/bank/'+b.id">{{ b.short_name || b.name }}</router-link></span>
+            <span class="name"><router-link :to="'/bank/'+b.bank_id">{{ b.banks?.short_name || b.banks?.name }}</router-link></span>
             <span class="val">{{ fmtNumber(b.cards_in_circulation) }}</span>
           </div>
         </div>
@@ -23,7 +23,7 @@ const Dashboard = {
         <div v-if="topVolume.length">
           <div class="rank-item" v-for="(b, i) in topVolume.slice(0,5)" :key="b.id">
             <span class="pos" :class="{gold:i===0,silver:i===1,bronze:i===2}">{{ i+1 }}</span>
-            <span class="name"><router-link :to="'/bank/'+b.id">{{ b.short_name || b.name }}</router-link></span>
+            <span class="name"><router-link :to="'/bank/'+b.bank_id">{{ b.banks?.short_name || b.banks?.name }}</router-link></span>
             <span class="val">{{ fmtAmount(b.transaction_volume) }}</span>
           </div>
         </div>
@@ -34,7 +34,7 @@ const Dashboard = {
         <div v-if="bottomActive.length">
           <div class="rank-item" v-for="(b, i) in bottomActive.slice(0,5)" :key="b.id">
             <span class="pos">{{ i+1 }}</span>
-            <span class="name"><router-link :to="'/bank/'+b.id">{{ b.short_name || b.name }}</router-link></span>
+            <span class="name"><router-link :to="'/bank/'+b.bank_id">{{ b.banks?.short_name || b.banks?.name }}</router-link></span>
             <span class="val" :style="{color: b.active_ratio < 50 ? 'var(--red)' : 'var(--amber)'}">{{ b.active_ratio?.toFixed(1) }}%</span>
           </div>
         </div>
@@ -71,7 +71,7 @@ const Dashboard = {
         </thead>
         <tbody>
           <tr v-for="b in filteredBanks" :key="b.id">
-            <td><router-link :to="'/bank/'+b.id">{{ b.short_name || b.name }}</router-link></td>
+            <td><router-link :to="'/bank/'+b.bank_id">{{ b.banks?.short_name || b.banks?.name }}</router-link></td>
             <td class="number">{{ fmtNumber(b.cards_in_circulation) }}</td>
             <td class="number">{{ fmtNumber(b.active_cards) }}</td>
             <td class="number">
@@ -85,6 +85,7 @@ const Dashboard = {
         </tbody>
       </table>
       <div v-if="filteredBanks.length === 0 && !loading" class="empty">无匹配结果</div>
+      <div v-if="loading" class="loading">加载中...</div>
     </div>
 
     <!-- 最新洞察 -->
@@ -92,7 +93,7 @@ const Dashboard = {
       <h2>📡 最新动态</h2>
       <div v-for="ins in insights" :key="ins.id" class="insight-item" :class="ins.category">
         <div>{{ ins.content }}</div>
-        <div class="meta">{{ new Date(ins.created_at).toLocaleDateString('zh-TW') }}
+        <div class="meta">{{ new Date(ins.created_at).toLocaleDateString("zh-TW") }}
           <span v-if="ins.source_url"> · <a :href="ins.source_url" target="_blank">来源</a></span>
         </div>
       </div>
@@ -103,43 +104,44 @@ const Dashboard = {
     const banks = Vue.ref([])
     const stats = Vue.ref([])
     const insights = Vue.ref([])
-    const searchText = Vue.ref('')
-    const sortKey = Vue.ref('cards_in_circulation')
-    const sortDir = Vue.ref('desc')
+    const searchText = Vue.ref("")
+    const sortKey = Vue.ref("cards_in_circulation")
+    const sortDir = Vue.ref("desc")
     const loading = Vue.ref(true)
 
     Vue.onMounted(async () => {
-      // 加载银行列表
-      const { data: bankData } = await supabase.from('banks').select('*').order('code')
-      if (bankData) banks.value = bankData
+      try {
+        // 加载银行列表
+        const { data: bankData } = await supabase.from("banks").select("*").order("code")
+        if (bankData) banks.value = bankData
 
-      // 加载最新月报 (取最大的 report_month)
-      const { data: statsData } = await supabase
-        .from('monthly_credit_stats')
-        .select('*, banks!inner(id, name, short_name)')
-        .order('report_month', { ascending: false })
-        .limit(1000)
+        // 加载最新月报
+        const { data: statsData } = await supabase
+          .from("monthly_credit_stats")
+          .select("*, banks!inner(id, name, short_name)")
+          .order("report_month", { ascending: false })
+          .limit(1000)
 
-      if (statsData) {
-        // 只保留最新月份的数据
-        const latest = statsData[0]?.report_month
-        stats.value = statsData.filter(s => s.report_month === latest)
-        // 计算有效卡率
-        stats.value.forEach(s => {
-          s.active_ratio = s.cards_in_circulation > 0
-            ? (s.active_cards / s.cards_in_circulation * 100)
-            : null
-        })
+        if (statsData && statsData.length) {
+          const latest = statsData[0]?.report_month
+          stats.value = statsData.filter(s => s.report_month === latest)
+          stats.value.forEach(s => {
+            s.active_ratio = s.cards_in_circulation > 0
+              ? (s.active_cards / s.cards_in_circulation * 100)
+              : null
+          })
+        }
+
+        // 加载最新洞察
+        const { data: insData } = await supabase
+          .from("insights")
+          .select("*, banks(name)")
+          .order("created_at", { ascending: false })
+          .limit(10)
+        if (insData) insights.value = insData
+      } catch (e) {
+        console.error("Dashboard load error:", e)
       }
-
-      // 加载最新洞察
-      const { data: insData } = await supabase
-        .from('insights')
-        .select('*, banks(name)')
-        .order('created_at', { ascending: false })
-        .limit(10)
-      if (insData) insights.value = insData
-
       loading.value = false
     })
 
@@ -158,10 +160,10 @@ const Dashboard = {
     })
 
     const latestMonth = Vue.computed(() => {
-      if (!stats.value.length) return ''
-      const d = new Date(stats.value[0].report_month + 'T00:00:00')
+      if (!stats.value.length) return ""
+      const d = new Date(stats.value[0].report_month + "T00:00:00")
       const roc = d.getFullYear() - 1911
-      return `民国${roc}年${d.getMonth()+1}月 (公元${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')})`
+      return "民国" + roc + "年" + (d.getMonth()+1) + "月 (公元" + d.getFullYear() + "-" + (d.getMonth()+1).toString().padStart(2,"0") + ")"
     })
 
     const filteredBanks = Vue.computed(() => {
@@ -169,12 +171,12 @@ const Dashboard = {
       if (searchText.value) {
         const q = searchText.value.toLowerCase()
         arr = arr.filter(s =>
-          (s.banks?.name || '').toLowerCase().includes(q) ||
-          (s.banks?.short_name || '').toLowerCase().includes(q)
+          (s.banks?.name || "").toLowerCase().includes(q) ||
+          (s.banks?.short_name || "").toLowerCase().includes(q)
         )
       }
       const key = sortKey.value
-      const dir = sortDir.value === 'asc' ? 1 : -1
+      const dir = sortDir.value === "asc" ? 1 : -1
       arr.sort((a,b) => ((a[key]||0) - (b[key]||0)) * dir)
       return arr
     })
