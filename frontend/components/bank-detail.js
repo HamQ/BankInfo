@@ -200,6 +200,49 @@ const BankDetail = {
     }
 
 
+    function renderQuarterlyCharts() {
+      // 数位存款图表
+      const del = document.getElementById('digital-chart')
+      if (del && digitalData.value.length) {
+        const dc = echarts.getInstanceByDom(del) || echarts.init(del, 'dark')
+        dc.setOption({
+          tooltip: { trigger: 'axis' },
+          legend: { data: ['第一类', '第二类', '第三类', '合计'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+          grid: { left: 70, right: 20, top: 20, bottom: 40 },
+          xAxis: { type: 'category', data: digitalData.value.map(s => {
+            const d = new Date(s.report_quarter + 'T00:00:00')
+            return (d.getFullYear()-1911)+'Q'+((d.getMonth())/3+1)
+          }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
+          yAxis: { type: 'value', name: '户数', axisLabel: { formatter: v => (v/10000).toFixed(0)+'万', fontSize: 10, color: '#94a3b8' } },
+          series: [
+            { name: '第一类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type1_accounts), itemStyle: { color: '#38bdf8' } },
+            { name: '第二类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type2_accounts), itemStyle: { color: '#34d399' } },
+            { name: '第三类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type3_accounts), itemStyle: { color: '#a78bfa' } },
+          ]
+        }, true)
+      }
+
+      // 逾放图表
+      const nel = document.getElementById('npl-chart')
+      if (nel && nplData.value.length) {
+        const nc = echarts.getInstanceByDom(nel) || echarts.init(nel, 'dark')
+        nc.setOption({
+          tooltip: { trigger: 'axis' },
+          legend: { data: ['逾放比率', '覆盖率'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+          grid: { left: 60, right: 60, top: 20, bottom: 40 },
+          xAxis: { type: 'category', data: nplData.value.map(s => {
+            const d = new Date(s.report_quarter + 'T00:00:00')
+            return (d.getFullYear()-1911)+'Q'+((d.getMonth())/3+1)
+          }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
+          yAxis: { type: 'value', name: '%', axisLabel: { formatter: v => v+'%', fontSize: 10, color: '#94a3b8' } },
+          series: [
+            { name: '逾放比率', type: 'line', data: nplData.value.map(s => s.npl_ratio), smooth: true, lineStyle: { color: '#f87171', width: 2 }, itemStyle: { color: '#f87171' } },
+            { name: '覆盖率', type: 'line', data: nplData.value.map(s => s.coverage_ratio), smooth: true, lineStyle: { color: '#38bdf8', width: 2 }, itemStyle: { color: '#38bdf8' } },
+          ]
+        }, true)
+      }
+    }
+
     function trendChange(field) {
       if (allStats.value.length < 2) return ''
       const prev = allStats.value[allStats.value.length - 2]
@@ -236,7 +279,7 @@ const BankDetail = {
 
     return {
       bank, latest, allStats, products, bankInsights, activeChart,
-      latestMonth, trendChange, trendDir, sourcePdfUrl,
+      latestMonth, trendChange, trendDir, sourcePdfUrl, digitalData, nplData,
       fmtNumber, fmtAmount, fmtPercent
     }
   }
