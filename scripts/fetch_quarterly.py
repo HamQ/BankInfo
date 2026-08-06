@@ -61,13 +61,13 @@ def find_zips(html, min_year=MIN_ROC_YEAR):
     results = []
     for u in urls:
         # 尝试提取年份季度
-        m = re.search(r'(\d{2,3})\s*Q?(\d)', u)
+        m = re.search(r'(\d{2,3})Q(\d)', u)
         if m:
             y, q = int(m.group(1)), int(m.group(2))
             if y < min_year:
                 continue
             if q < 1 or q > 4:
-                q = 4  # 默认为 Q4
+                continue
             month = (q - 1) * 3 + 1
             results.append((date(y + 1911, month, 1), u))
     return sorted(results, reverse=True)
@@ -93,7 +93,7 @@ def parse_digital_acct(zip_bytes):
     for row in ws.iter_rows(min_row=1, max_row=5, max_col=10, values_only=True):
         for c in row:
             if c and isinstance(c, str):
-                m = re.search(r'(\d{2,3})\s*年\s*第?\s*(\d)\s*季', str(c))
+                m = re.search(r'(\d{2,3})\s*年\s*Q(\d)', str(c)) or re.search(r'(\d{2,3})\s*年\s*第?\s*(\d)\s*季', str(c)) or re.search(r'(\d{2,3})Q(\d)', str(c))
                 if m:
                     y, q = int(m.group(1)), int(m.group(2))
                     rq = date(y + 1911, (q - 1) * 3 + 1, 1)
@@ -145,7 +145,7 @@ def parse_npl(zip_bytes):
     for row in ws.iter_rows(min_row=1, max_row=5, max_col=10, values_only=True):
         for c in row:
             if c and isinstance(c, str):
-                m = re.search(r'(\d{2,3})\s*年\s*第?\s*(\d)\s*季', str(c))
+                m = re.search(r'(\d{2,3})\s*年\s*Q(\d)', str(c)) or re.search(r'(\d{2,3})\s*年\s*第?\s*(\d)\s*季', str(c)) or re.search(r'(\d{2,3})Q(\d)', str(c))
                 if m:
                     y, q = int(m.group(1)), int(m.group(2))
                     rq = date(y + 1911, (q - 1) * 3 + 1, 1)
