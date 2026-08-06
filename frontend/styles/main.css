@@ -318,8 +318,50 @@ td a:hover { text-decoration: underline; }
   font-size: 14px;
 }
 
-/* ── 响应式 ── */
-@media (max-width: 900px) {
-  .rank-grid, .metrics-grid { grid-template-columns: 1fr; }
-  .container { padding: 16px; }
+/* ── 响应式：平板 ── */
+@media (max-width: 1024px) {
+  .rank-grid { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .container { padding: 20px; }
+  .card { padding: 18px 20px; }
+  .navbar h1 { font-size: 14px; }
+  .chart-box { height: 340px; }
+}
+
+/* ── 响应式：手机 ── */
+@media (max-width: 640px) {
+  .navbar { padding: 0 12px; height: 50px; }
+  .navbar h1 { font-size: 13px; }
+  .navbar .nav-links a { padding: 5px 10px; font-size: 11px; }
+  .navbar .nav-right { gap: 6px; font-size: 10px; }
+  .container { padding: 10px; }
+  .card { padding: 14px 14px; margin-bottom: 10px; border-radius: var(--radius); }
+  .card h2 { font-size: 13px; margin-bottom: 10px; }
+  .rank-grid { grid-template-columns: 1fr; gap: 8px; margin-bottom: 10px; }
+  .rank-card { padding: 12px 14px; }
+  .rank-card h3 { font-size: 10px; margin-bottom: 8px; }
+  .rank-item { font-size: 11px; padding: 6px 0; }
+  .rank-item .pos { width: 18px; height: 18px; font-size: 10px; }
+  .rank-item .val { font-size: 11px; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px; }
+  .metric-card { padding: 10px 12px; border-radius: var(--radius-sm); }
+  .metric-card .label { font-size: 9px; }
+  .metric-card .value { font-size: 16px; }
+  .metric-card .change { font-size: 10px; }
+  .tab-bar { margin-bottom: 12px; }
+  .tab-btn { padding: 6px 12px; font-size: 11px; border-radius: 6px; }
+  .filter-bar { gap: 6px; margin-bottom: 10px; flex-direction: column; }
+  .filter-bar input, .filter-bar select { padding: 7px 10px; font-size: 12px; width: 100% !important; }
+  .card:has(table) { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 12px 8px; }
+  table { font-size: 11px; min-width: 560px; }
+  thead th { padding: 7px 8px; font-size: 9px; }
+  tbody td { padding: 7px 8px; }
+  .chart-box { height: 260px; }
+  .product-grid { grid-template-columns: 1fr; }
+  .product-card { padding: 10px 12px; font-size: 12px; }
+  .btn { padding: 6px 12px; font-size: 11px; }
+  .compare-selector { flex-direction: column; align-items: stretch; gap: 8px; }
+  .compare-selector select { min-width: auto; width: 100%; }
+  .insight-item { padding: 10px 12px; font-size: 12px; }
+  .loading { padding: 32px; font-size: 13px; }
 }
