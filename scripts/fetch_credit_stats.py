@@ -151,7 +151,7 @@ def upsert_month(supabase: Client, report_month: date, rows: list, source_url: s
             "bad_debt_coverage_ratio": row["bad_debt_coverage_ratio"],
             "bad_debt_writeoff_month": row["bad_debt_writeoff_month"],
             "bad_debt_writeoff_ytd": row["bad_debt_writeoff_ytd"],
-            "source_url": source_url,
+            "source_url": source_url.replace('.zip', '.pdf'),
         }, on_conflict="bank_id,report_month").execute()
         count += 1
     return count

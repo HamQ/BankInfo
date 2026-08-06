@@ -112,7 +112,7 @@ def upsert(supabase, rm, rows, src, c2i):
             "contract_limit": r["contract_limit"], "available_limit": r["available_limit"],
             "loan_balance": r["loan_balance"], "delinquency_ratio": r["delinquency_ratio"],
             "provision_balance": r["provision_balance"], "writeoff_month": r["writeoff_month"],
-            "writeoff_ytd": r["writeoff_ytd"], "source_url": src,
+            "writeoff_ytd": r["writeoff_ytd"], "source_url": src.replace('.zip', '.pdf'),
         }, on_conflict="bank_id,report_month").execute()
         n += 1
     return n
