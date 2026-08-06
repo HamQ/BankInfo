@@ -197,3 +197,31 @@ td a:hover { text-decoration: underline; }
 .product-card .p-tag.mc { background: #eb001b; color: white; }
 .product-card .p-tag.jcb { background: #0b7cba; color: white; }
 .product-card .p-tag.ae { background: #006fcf; color: white; }
+
+/* ── 类型切换 Tab ── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: var(--gray-100);
+  border-radius: 8px;
+  padding: 4px;
+  width: fit-content;
+}
+.tab-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: var(--gray-600);
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--navy); }
+.tab-btn.active {
+  background: var(--white);
+  color: var(--navy);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
