@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-季度补充数据同步 — 数位存款 + 逾放资料 + 储值卡
+季度补充数据同步 — 数位存款 + 逾放资料
+根据实际 Excel 结构解析
 """
 import os, sys, re, io, zipfile, ssl
 from datetime import date
@@ -28,20 +29,6 @@ SOURCES = {
 USER_AGENT = "Mozilla/5.0 (compatible; BankInfoBot/1.0)"
 MIN_ROC_YEAR = 113
 
-BANK_CODE_MAP = {
-    "004": "臺灣銀行", "005": "臺灣土地銀行", "006": "合作金庫商業銀行",
-    "007": "第一商業銀行", "008": "華南商業銀行", "009": "彰化商業銀行",
-    "011": "上海商業儲蓄銀行", "012": "台北富邦商業銀行", "013": "國泰世華商業銀行",
-    "016": "高雄銀行", "017": "兆豐國際商業銀行", "021": "花旗(台灣)商業銀行",
-    "050": "臺灣中小企業銀行", "052": "渣打國際商業銀行", "053": "台中商業銀行",
-    "081": "滙豐(台灣)商業銀行", "101": "華泰商業銀行", "102": "臺灣新光商業銀行",
-    "103": "陽信商業銀行", "108": "三信商業銀行", "803": "聯邦商業銀行",
-    "805": "遠東國際商業銀行", "806": "元大商業銀行", "807": "永豐商業銀行",
-    "808": "玉山商業銀行", "809": "凱基商業銀行", "810": "星展(台灣)商業銀行",
-    "812": "台新國際商業銀行", "815": "安泰商業銀行", "822": "中國信託商業銀行",
-}
-BANK_NAME_MAP = {v: k for k, v in BANK_CODE_MAP.items()}
-
 def ssl_ctx():
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -54,19 +41,35 @@ def fetch(url):
         return r.read().decode("utf-8")
 
 def find_zips(html, min_year=MIN_ROC_YEAR):
-    """从页面提取 ZIP URL，返回 [(report_date, url), ...]"""
-    # 匹配季度: Q1-Q4 或直接年份
+    """提取所有 ZIP URL，匹配 YYYQN 季度格式"""
     pattern = r'(https?://[^"\s]*?\.zip)'
     urls = re.findall(pattern, html)
     results = []
     for u in urls:
-        # 尝试提取年份季度
         m = re.search(r'(\d{2,3})Q(\d)', u)
         if m:
             y, q = int(m.group(1)), int(m.group(2))
-            if y < min_year:
+            if y < min_year or q < 1 or q > 4:
                 continue
-            if q < 1 or q > 4:
+            month = (q - 1) * 3 + 1
+            results.append((date(y + 1911, month, 1), u))
+    return sorted(results, reverse=True)
+
+def find_zips_npl(html, min_year=MIN_ROC_YEAR):
+    """NPL 页面: URL 含 /附件三/ 且文件名含年份"""
+    pattern = r'(https?://[^"\s]*?附件三[^"\s]*?\.zip)'
+    urls = re.findall(pattern, html)
+    results = []
+    for u in urls:
+        # 尝试从 URL 提取年份季度: 114Q4 或 114 年 Q4
+        m = re.search(r'(\d{2,3})Q(\d)', u)
+        if not m:
+            m = re.search(r'/(\d{2,3})(\d{2})[._]', u)  # 如 /11401_
+        if m:
+            y, q = int(m.group(1)), int(m.group(2))
+            if q > 4:  # 可能是月份 01-12
+                q = (q - 1) // 3 + 1
+            if y < min_year or q < 1 or q > 4:
                 continue
             month = (q - 1) * 3 + 1
             results.append((date(y + 1911, month, 1), u))
@@ -78,108 +81,125 @@ def download_zip(url):
     with urlopen(req, context=ssl_ctx(), timeout=60) as r:
         return r.read()
 
-def parse_digital_acct(zip_bytes):
-    """解析数位存款 Excel"""
+def parse_digital_acct(zip_bytes, fallback_url):
+    """解析数位存款 Excel — 实际格式:
+    标题行: 數位存款帳戶開戶數統計
+    日期行: 中華民國105年12月
+    表头: (空白) | 第一類帳戶 | 第二類帳戶 | 第三類帳戶 | 合計
+    数据行: 004 臺銀 | 201 | 197 | 0 | 398
+    """
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        xlsx = [n for n in zf.namelist() if n.endswith(".xlsx")]
-        if not xlsx:
-            return None, []
-        with zf.open(xlsx[0]) as f:
+        # ZIP 内文件名可能是乱码 (Big5)，按扩展名找
+        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx")]
+        if not xlsx_files:
+            return None, [], "ZIP 内无 xlsx 文件: " + ", ".join(zf.namelist()[:5])
+        with zf.open(xlsx_files[0]) as f:
             wb = openpyxl.load_workbook(f, data_only=True)
-    ws = wb[wb.sheetnames[0]]
 
-    # 找报告季度
+    ws = wb[wb.sheetnames[0]]
+    
+    # 找日期: "中華民國105年12月"
     rq = None
-    for row in ws.iter_rows(min_row=1, max_row=5, max_col=10, values_only=True):
+    for row in ws.iter_rows(min_row=1, max_row=5, max_col=5, values_only=True):
         for c in row:
             if c and isinstance(c, str):
-                m = re.search(r'(\d{2,3})\s*年\s*Q(\d)', str(c)) or re.search(r'(\d{2,3})\s*年\s*第?\s*(\d)\s*季', str(c)) or re.search(r'(\d{2,3})Q(\d)', str(c))
+                m = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月', str(c))
                 if m:
-                    y, q = int(m.group(1)), int(m.group(2))
-                    rq = date(y + 1911, (q - 1) * 3 + 1, 1)
+                    y, mo = int(m.group(1)), int(m.group(2))
+                    rq = date(y + 1911, mo, 1)
                     break
         if rq:
             break
     if not rq:
-        return None, []
+        return None, [], "未找到报告月份"
 
     rows = []
-    for row in ws.iter_rows(min_row=4, max_row=ws.max_row, max_col=6, values_only=True):
-        bn = row[0]
-        if not bn or not isinstance(bn, str):
+    for row in ws.iter_rows(min_row=6, max_row=ws.max_row, max_col=5, values_only=True):
+        col0 = row[0]
+        if not col0 or not isinstance(col0, str):
             continue
-        bn = re.sub(r"[\s\u3000]+", "", str(bn).strip())
-        # 匹配银行名
-        code = None
-        for name, c in BANK_NAME_MAP.items():
-            if name in bn or bn in name:
-                code = c
-                break
-        if not code:
+        col0 = col0.strip()
+        
+        # 跳过汇总行
+        if "總計" in col0 or "合计" in col0:
             continue
-
+        
+        # 提取银行代码: "004 臺銀" → code=004
+        m = re.match(r'^(\d{3})\s', col0)
+        if not m:
+            continue
+        code = m.group(1)
+        
         def ti(v):
-            try: return None if v is None else int(float(v))
+            if v is None: return None
+            try: return int(float(str(v).replace(",", "")))
             except: return None
-
+        
         rows.append({
             "code": code,
-            "type1_accounts": ti(row[1]),  # 第一类
-            "type2_accounts": ti(row[2]),  # 第二类
-            "type3_accounts": ti(row[3]),  # 第三类
-            "total_accounts": ti(row[4]),  # 合计
+            "type1_accounts": ti(row[1]),
+            "type2_accounts": ti(row[2]),
+            "type3_accounts": ti(row[3]),
+            "total_accounts": ti(row[4]),
         })
-    return rq, rows
+    
+    return rq, rows, None
 
-def parse_npl(zip_bytes):
+def parse_npl(zip_bytes, fallback_url):
     """解析逾放资料 Excel"""
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        xlsx = [n for n in zf.namelist() if n.endswith(".xlsx")]
-        if not xlsx:
-            return None, []
-        with zf.open(xlsx[0]) as f:
+        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx")]
+        if not xlsx_files:
+            return None, [], "ZIP 内无 xlsx"
+        with zf.open(xlsx_files[0]) as f:
             wb = openpyxl.load_workbook(f, data_only=True)
-    ws = wb[wb.sheetnames[0]]
 
+    ws = wb[wb.sheetnames[0]]
+    
+    # 找日期
     rq = None
     for row in ws.iter_rows(min_row=1, max_row=5, max_col=10, values_only=True):
         for c in row:
             if c and isinstance(c, str):
-                m = re.search(r'(\d{2,3})\s*年\s*Q(\d)', str(c)) or re.search(r'(\d{2,3})\s*年\s*第?\s*(\d)\s*季', str(c)) or re.search(r'(\d{2,3})Q(\d)', str(c))
+                m = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月', str(c))
                 if m:
-                    y, q = int(m.group(1)), int(m.group(2))
-                    rq = date(y + 1911, (q - 1) * 3 + 1, 1)
+                    y, mo = int(m.group(1)), int(m.group(2))
+                    rq = date(y + 1911, mo, 1)
                     break
         if rq:
             break
     if not rq:
-        return None, []
+        return None, [], "未找到报告月份"
 
     rows = []
-    for row in ws.iter_rows(min_row=4, max_row=ws.max_row, max_col=5, values_only=True):
-        bn = row[0]
-        if not bn or not isinstance(bn, str):
+    for row in ws.iter_rows(min_row=5, max_row=ws.max_row, max_col=5, values_only=True):
+        col0 = row[0]
+        if not col0 or not isinstance(col0, str):
             continue
-        bn = re.sub(r"[\s\u3000]+", "", str(bn).strip())
-        code = None
-        for name, c in BANK_NAME_MAP.items():
-            if name in bn or bn in name:
-                code = c
-                break
-        if not code:
+        col0 = col0.strip()
+        if "總計" in col0 or "合计" in col0:
             continue
-
+        
+        # 提取银行代码
+        m = re.match(r'^(\d{3})\s', col0)
+        if not m:
+            continue
+        code = m.group(1)
+        
         def tn(v):
-            try: return None if v is None else round(float(v), 2)
+            if v is None: return None
+            try: return round(float(str(v).replace(",", "")), 2)
             except: return None
-
+        
+        # NPL Excel 结构: 银行 | 银行类型? | 逾放比率 | 覆盖率 | ...
         rows.append({
             "code": code,
             "bank_type": str(row[1]) if row[1] else None,
             "npl_ratio": tn(row[2]),
             "coverage_ratio": tn(row[3]),
         })
-    return rq, rows
+    
+    return rq, rows, None
 
 def run_source(supabase, cfg, code_to_id):
     table = cfg["table"]
@@ -190,26 +210,34 @@ def run_source(supabase, cfg, code_to_id):
     print(f"{desc} — 现有 {len(existing)} 个季度")
 
     html = fetch(cfg["url"])
-    months = find_zips(html)
+    
+    # 选 Zip 查找函数
+    if "npl" in table:
+        months = find_zips_npl(html)
+    else:
+        months = find_zips(html)
     print(f"发现 {len(months)} 个季度")
 
     new_count = 0
     for rq, zurl in months:
-        if rq.isoformat() in existing:
+        ms = rq.isoformat()
+        if ms in existing:
             continue
-        print(f"  新季度: 民国{rq.year-1911}年Q{(rq.month-1)//3+1}")
+        roc_y = rq.year - 1911
+        roc_m = rq.month
+        print(f"  新季度: 民国{roc_y}年{roc_m}月")
         try:
             zb = download_zip(zurl)
             if "digital" in table:
-                pq, rows = parse_digital_acct(zb)
+                pq, data_rows, err = parse_digital_acct(zb, zurl)
             else:
-                pq, rows = parse_npl(zb)
-
+                pq, data_rows, err = parse_npl(zb, zurl)
+            
             if pq is None:
-                print("    无法解析")
+                print(f"    跳过: {err}")
                 continue
 
-            for r in rows:
+            for r in data_rows:
                 bid = code_to_id.get(r["code"])
                 if not bid:
                     continue
@@ -234,8 +262,8 @@ def run_source(supabase, cfg, code_to_id):
                 supabase.table(table).upsert(record, on_conflict="bank_id,report_quarter").execute()
                 new_count += 1
 
-            print(f"    入库 {len(rows)} 笔")
-            existing.add(rq.isoformat())
+            print(f"    入库 {len(data_rows)} 笔")
+            existing.add(ms)
         except Exception as e:
             print(f"    失败: {e}")
 
@@ -251,6 +279,7 @@ def main():
 
     resp = supabase.table("banks").select("id,code").execute()
     code_to_id = {b["code"]: b["id"] for b in resp.data}
+    print(f"已加载 {len(code_to_id)} 家银行映射")
 
     for name, cfg in SOURCES.items():
         try:
