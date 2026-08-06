@@ -142,7 +142,7 @@ const BankDetail = {
     function renderChart() {
       const el = document.getElementById('bank-chart')
       if (!el || !allStats.value.length) return
-      let chart = echarts.getInstanceByDom(el) || echarts.init(el)
+      let chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark')
       const d = allStats.value
 
       if (activeChart.value === 'cards') {

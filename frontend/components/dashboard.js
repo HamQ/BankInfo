@@ -67,7 +67,7 @@ const Dashboard = {
               <th style="width:180px">银行</th>
               <th class="number" style="width:110px">流通卡数</th>
               <th class="number" style="width:110px">有效卡数</th>
-              <th class="number" style="width:90px">有效卡率</th>
+              <th class="number" style="width:110px">有效卡率</th>
               <th class="number" style="width:130px">当月签帐金额</th>
               <th class="number" style="width:130px">循环信用余额</th>
               <th class="number" style="width:90px">逾期3M+</th>
@@ -79,7 +79,7 @@ const Dashboard = {
               <td class="number">{{ fmtNumber(b.cards_in_circulation) }}</td>
               <td class="number">{{ fmtNumber(b.active_cards) }}</td>
               <td class="number">
-                <span v-if="b.active_ratio != null" class="ratio-bar" :style="{width: Math.min(b.active_ratio, 100)+'px', background: b.active_ratio < 50 ? 'var(--red)' : b.active_ratio < 65 ? 'var(--amber)' : 'var(--green)'}"></span>
+                <span v-if="b.active_ratio != null" class="ratio-bar" :style="{width: (b.active_ratio*0.55)+'px', background: b.active_ratio < 50 ? 'var(--red)' : b.active_ratio < 65 ? 'var(--amber)' : 'var(--green)'}"></span>
                 {{ fmtPercent(b.active_ratio) }}
               </td>
               <td class="number">{{ fmtAmount(b.transaction_volume) }}</td>
