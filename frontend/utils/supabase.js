@@ -1,9 +1,8 @@
 // Supabase 客户端初始化
 const SUPABASE_URL = "https://hpuatpbfbfxeyljfbjgs.supabase.co"
-// 临时使用 service_role key（anon 尚待 GRANT 授权后切回）
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...REDACTED-ROTATE"
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwdWF0cGJmYmZ4ZXlsamZiamdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NzY2MzIsImV4cCI6MjEwMTU1MjYzMn0.Hd66KOtwvk1Dc0vyG12dB5nUyfhWj4_gqoRdfoyeb-8"
 
-var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // 辅助：格式化金额（千元 NTD -> 亿元/万元）
 function fmtAmount(val) {
