@@ -56,8 +56,8 @@ def find_zips(html, min_year=MIN_ROC_YEAR):
     return sorted(results, reverse=True)
 
 def find_zips_npl(html, min_year=MIN_ROC_YEAR):
-    """NPL 页面: URL 含 /附件三/ 且文件名含年份"""
-    pattern = r'(https?://[^"\s]*?附件三[^"\s]*?\.zip)'
+    """NPL 页面: URL 含附件三(含URL编码)且文件名含年份"""
+    pattern = r'(https?://[^"\s]*?(?:附件三|%E9%99%84%E4%BB%B6%E4%B8%89)[^"\s]*?\.zip)'
     urls = re.findall(pattern, html)
     results = []
     for u in urls:
@@ -90,9 +90,13 @@ def parse_digital_acct(zip_bytes, fallback_url):
     """
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         # ZIP 内文件名可能是乱码 (Big5)，按扩展名找
-        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx")]
+        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx") or n.endswith(".xls")]
         if not xlsx_files:
-            return None, [], "ZIP 内无 xlsx 文件: " + ", ".join(zf.namelist()[:5])
+            # 尝试 .ods
+            ods_files = [n for n in zf.namelist() if n.endswith(".ods")]
+            if ods_files:
+                return None, [], "ODS 格式暂不支持，请手动转换: " + ods_files[0]
+            return None, [], "ZIP 内无 Excel 文件: " + ", ".join(zf.namelist()[:5])
         with zf.open(xlsx_files[0]) as f:
             wb = openpyxl.load_workbook(f, data_only=True)
 
@@ -119,6 +123,10 @@ def parse_digital_acct(zip_bytes, fallback_url):
         if not col0 or not isinstance(col0, str):
             continue
         col0 = col0.strip()
+        
+        # DEBUG: 打印前5行第一列内容
+        if len(rows) < 5:
+            print(f"    DEBUG row: [{col0}]", flush=True)
         
         # 跳过汇总行
         if "總計" in col0 or "合计" in col0:
@@ -148,9 +156,9 @@ def parse_digital_acct(zip_bytes, fallback_url):
 def parse_npl(zip_bytes, fallback_url):
     """解析逾放资料 Excel"""
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx")]
+        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx") or n.endswith(".xls")]
         if not xlsx_files:
-            return None, [], "ZIP 内无 xlsx"
+            return None, [], "ZIP 内无 Excel"
         with zf.open(xlsx_files[0]) as f:
             wb = openpyxl.load_workbook(f, data_only=True)
 
