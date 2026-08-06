@@ -148,7 +148,7 @@ const BankCompare = {
     function renderRadar() {
       const el = document.getElementById('radar-chart')
       if (!el || !compareData.value.length) return
-      const chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark')
+      const chart = echarts.getInstanceByDom(el) || echarts.init(el)
 
       const metrics = [
         { key: 'cards_in_circulation', label: '流通卡数', max: 1e7 },
@@ -188,7 +188,7 @@ const BankCompare = {
     function renderTrend(byBank) {
       const el = document.getElementById('trend-chart')
       if (!el) return
-      const chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark')
+      const chart = echarts.getInstanceByDom(el) || echarts.init(el)
 
       const metricMap = {
         cards: { key: 'cards_in_circulation', name: '流通卡数' },

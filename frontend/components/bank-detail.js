@@ -1,5 +1,5 @@
 // ============================================
-// BankDetail 组件 — 银行详情页
+// BankDetail 组件 — 银行详情页 v2
 // ============================================
 const BankDetail = {
   template: `
@@ -8,15 +8,15 @@ const BankDetail = {
     <div class="card" style="display:flex;justify-content:space-between;align-items:center">
       <div>
         <h2 style="margin:0">{{ bank.name }}</h2>
-        <div style="font-size:12px;color:var(--gray-400);margin-top:4px">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
           <span v-if="bank.notes">📌 {{ bank.notes }} · </span>
           <a :href="bank.website" target="_blank" v-if="bank.website">官网</a>
         </div>
       </div>
       <div style="text-align:right" v-if="latest">
-        <div style="font-size:12px;color:var(--gray-400)">最新数据: {{ latestMonth }}</div>
-        <div style="font-size:12px;color:var(--gray-400);margin-top:2px">
-          来源: <a :href="sourcePdfUrl" target="_blank" v-if="latest.source_url">金管局</a>
+        <div style="font-size:12px;color:var(--text-muted)">最新数据: {{ latestMonth }}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
+          来源: <a :href="sourcePdfUrl" target="_blank" v-if="latest.source_url">金管局 PDF</a>
         </div>
       </div>
     </div>
@@ -53,7 +53,8 @@ const BankDetail = {
         <button class="btn" :class="activeChart==='volume' ? 'btn-primary' : 'btn-outline'" @click="activeChart='volume'">签帐金额</button>
         <button class="btn" :class="activeChart==='risk' ? 'btn-primary' : 'btn-outline'" @click="activeChart='risk'">风险指标</button>
       </div>
-      <div class="chart-box" id="bank-chart"></div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">💡 点击图表上的数据点可直接跳转至金管局对应月份的原始档案</div>
+      <div class="chart-box" id="bank-chart"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">💡 点击图表上的数据点可直接跳转至金管局对应月份的 PDF 原始档案</div>
     </div>
 
     <!-- 卡产品 -->
@@ -67,9 +68,29 @@ const BankDetail = {
             <span v-if="p.card_level" class="p-tag">{{ p.card_level }}</span>
             <span v-if="p.is_cobrand" class="p-tag">联名: {{ p.co_brand_partner }}</span>
           </div>
-          <div style="font-size:12px;color:var(--gray-400);margin-top:4px" v-if="p.key_benefits">{{ p.key_benefits?.substring(0, 80) }}{{ p.key_benefits?.length > 80 ? '...' : '' }}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px" v-if="p.key_benefits">{{ p.key_benefits?.substring(0, 80) }}{{ p.key_benefits?.length > 80 ? '...' : '' }}</div>
         </div>
       </div>
+    </div>
+
+    <!-- 数位存款帐户 (季度) -->
+    <div class="card" v-if="digitalData.length">
+      <h2>📱 数位存款帐户 (季度)
+        <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px" v-if="digitalData[digitalData.length-1]?.source_url">
+          来源: <a :href="digitalData[digitalData.length-1].source_url.replace('.zip','.pdf')" target="_blank" style="color:var(--accent)">金管局</a>
+        </span>
+      </h2>
+      <div class="chart-box" id="digital-chart" style="height:300px"></div>
+    </div>
+
+    <!-- 逾放资料 (季度) -->
+    <div class="card" v-if="nplData.length">
+      <h2>⚠️ 逾放资料 (季度)
+        <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:8px" v-if="nplData[nplData.length-1]?.source_url">
+          来源: <a :href="nplData[nplData.length-1].source_url.replace('.zip','.pdf')" target="_blank" style="color:var(--accent)">金管局</a>
+        </span>
+      </h2>
+      <div class="chart-box" id="npl-chart" style="height:300px"></div>
     </div>
 
     <!-- 洞察 -->
@@ -90,59 +111,47 @@ const BankDetail = {
     const allStats = Vue.ref([])
     const products = Vue.ref([])
     const bankInsights = Vue.ref([])
+    const digitalData = Vue.ref([])
+    const nplData = Vue.ref([])
     const activeChart = Vue.ref('cards')
 
     Vue.onMounted(async () => {
       const bankId = route.params.id
 
-      // 银行基础信息
       const { data: bd } = await supabase.from('banks').select('*').eq('id', bankId).single()
       if (bd) bank.value = bd
 
-      // 全量月报（按日期升序）
       const { data: sd } = await supabase
-        .from('monthly_credit_stats')
-        .select('*')
-        .eq('bank_id', bankId)
-        .order('report_month', { ascending: true })
-
+        .from('monthly_credit_stats').select('*').eq('bank_id', bankId).order('report_month', { ascending: true })
       if (sd) {
         sd.forEach(s => {
-          s.active_ratio = s.cards_in_circulation > 0
-            ? parseFloat(((s.active_cards / s.cards_in_circulation) * 100).toFixed(2))
-            : null
+          s.active_ratio = s.cards_in_circulation > 0 ? parseFloat((s.active_cards / s.cards_in_circulation * 100).toFixed(2)) : null
         })
         allStats.value = sd
         latest.value = sd[sd.length - 1]
       }
 
-      // 卡产品
-      const { data: pd } = await supabase
-        .from('card_products')
-        .select('*')
-        .eq('bank_id', bankId)
-        .order('name')
+      const { data: pd } = await supabase.from('card_products').select('*').eq('bank_id', bankId).order('name')
       if (pd) products.value = pd
 
-      // 洞察
-      const { data: ind } = await supabase
-        .from('insights')
-        .select('*')
-        .eq('bank_id', bankId)
-        .order('created_at', { ascending: false })
-        .limit(10)
+      const { data: ind } = await supabase.from('insights').select('*').eq('bank_id', bankId).order('created_at', { ascending: false }).limit(10)
       if (ind) bankInsights.value = ind
 
-      Vue.nextTick(() => renderChart())
+      const { data: dd } = await supabase.from('quarterly_digital_acct_stats').select('*').eq('bank_id', bankId).order('report_quarter', { ascending: true })
+      if (dd) digitalData.value = dd
+
+      const { data: nd } = await supabase.from('quarterly_npl_stats').select('*').eq('bank_id', bankId).order('report_quarter', { ascending: true })
+      if (nd) nplData.value = nd
+
+      Vue.nextTick(() => { renderChart(); renderQuarterlyCharts() })
     })
 
-    // 监听 chart 类型切换
     Vue.watch(activeChart, () => Vue.nextTick(() => renderChart()))
 
     function renderChart() {
       const el = document.getElementById('bank-chart')
       if (!el || !allStats.value.length) return
-      let chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark')
+      let chart = echarts.getInstanceByDom(el) || echarts.init(el)
       const d = allStats.value
 
       if (activeChart.value === 'cards') {
@@ -188,8 +197,6 @@ const BankDetail = {
         })
       }
 
-      
-      // 点击图表跳转来源 (只绑定一次)
       chart.off('click')
       chart.on('click', function(params) {
         if (params.dataIndex != null && allStats.value[params.dataIndex]) {
@@ -199,20 +206,15 @@ const BankDetail = {
       })
     }
 
-
     function renderQuarterlyCharts() {
-      // 数位存款图表
       const del = document.getElementById('digital-chart')
       if (del && digitalData.value.length) {
         const dc = echarts.getInstanceByDom(del) || echarts.init(del, 'dark')
         dc.setOption({
           tooltip: { trigger: 'axis' },
-          legend: { data: ['第一类', '第二类', '第三类', '合计'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+          legend: { data: ['第一类', '第二类', '第三类'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
           grid: { left: 70, right: 20, top: 20, bottom: 40 },
-          xAxis: { type: 'category', data: digitalData.value.map(s => {
-            const d = new Date(s.report_quarter + 'T00:00:00')
-            return (d.getFullYear()-1911)+'Q'+((d.getMonth())/3+1)
-          }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
+          xAxis: { type: 'category', data: digitalData.value.map(s => { const dt = new Date(s.report_quarter + 'T00:00:00'); return (dt.getFullYear()-1911)+'Q'+((dt.getMonth())/3+1) }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
           yAxis: { type: 'value', name: '户数', axisLabel: { formatter: v => (v/10000).toFixed(0)+'万', fontSize: 10, color: '#94a3b8' } },
           series: [
             { name: '第一类', type: 'bar', stack: 'total', data: digitalData.value.map(s => s.type1_accounts), itemStyle: { color: '#38bdf8' } },
@@ -222,7 +224,6 @@ const BankDetail = {
         }, true)
       }
 
-      // 逾放图表
       const nel = document.getElementById('npl-chart')
       if (nel && nplData.value.length) {
         const nc = echarts.getInstanceByDom(nel) || echarts.init(nel, 'dark')
@@ -230,10 +231,7 @@ const BankDetail = {
           tooltip: { trigger: 'axis' },
           legend: { data: ['逾放比率', '覆盖率'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
           grid: { left: 60, right: 60, top: 20, bottom: 40 },
-          xAxis: { type: 'category', data: nplData.value.map(s => {
-            const d = new Date(s.report_quarter + 'T00:00:00')
-            return (d.getFullYear()-1911)+'Q'+((d.getMonth())/3+1)
-          }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
+          xAxis: { type: 'category', data: nplData.value.map(s => { const dt = new Date(s.report_quarter + 'T00:00:00'); return (dt.getFullYear()-1911)+'Q'+((dt.getMonth())/3+1) }), axisLabel: { fontSize: 10, color: '#94a3b8' } },
           yAxis: { type: 'value', name: '%', axisLabel: { formatter: v => v+'%', fontSize: 10, color: '#94a3b8' } },
           series: [
             { name: '逾放比率', type: 'line', data: nplData.value.map(s => s.npl_ratio), smooth: true, lineStyle: { color: '#f87171', width: 2 }, itemStyle: { color: '#f87171' } },
@@ -267,19 +265,19 @@ const BankDetail = {
       return c.startsWith('+') ? 'up' : 'down'
     }
 
-    
-    const sourcePdfUrl = Vue.computed(() => {
-      const src = latest.value?.source_url
-      return src ? src.replace('.zip', '.pdf') : ''
-    })
     const latestMonth = Vue.computed(() => {
       if (!allStats.value.length) return ''
       return rocDate(allStats.value[allStats.value.length - 1].report_month)
     })
 
+    const sourcePdfUrl = Vue.computed(() => {
+      const src = latest.value?.source_url
+      return src ? src.replace('.zip', '.pdf') : ''
+    })
+
     return {
-      bank, latest, allStats, products, bankInsights, activeChart,
-      latestMonth, trendChange, trendDir, sourcePdfUrl, digitalData, nplData,
+      bank, latest, allStats, products, bankInsights, digitalData, nplData, activeChart,
+      latestMonth, trendChange, trendDir, sourcePdfUrl,
       fmtNumber, fmtAmount, fmtPercent
     }
   }
