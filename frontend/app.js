@@ -20,7 +20,7 @@ const app = Vue.createApp({
         <router-link to="/compare" active-class="active">银行对比</router-link>
       </div>
       <div class="nav-right">
-        数据源: 金管会银行局 · 最后更新: {{ lastUpdate }}
+        数据源: 金管会银行局 · 最后更新: {{ lastUpdate || "加载中..." }}
       </div>
     </nav>
     <div class="container">
@@ -29,23 +29,26 @@ const app = Vue.createApp({
   </div>`,
 
   setup() {
-    const lastUpdate = Vue.ref('')
+    const lastUpdate = Vue.ref("")
     Vue.onMounted(async () => {
-      const { data } = await supabase
-        .from('monthly_credit_stats')
-        .select('report_month')
-        .order('report_month', { ascending: false })
-        .limit(1)
-      if (data?.length) {
-        const d = new Date(data[0].report_month + 'T00:00:00')
-        lastUpdate.value = rocDate(data[0].report_month)
+      try {
+        const { data } = await supabase
+          .from("monthly_credit_stats")
+          .select("report_month")
+          .order("report_month", { ascending: false })
+          .limit(1)
+        if (data?.length) {
+          lastUpdate.value = rocDate(data[0].report_month)
+        }
+      } catch (e) {
+        console.error("App init error:", e)
       }
     })
     return { lastUpdate }
   }
 })
 
-// 全局过滤器/方法
+// 全局方法
 app.config.globalProperties.fmtNumber = fmtNumber
 app.config.globalProperties.fmtAmount = fmtAmount
 app.config.globalProperties.fmtPercent = fmtPercent
