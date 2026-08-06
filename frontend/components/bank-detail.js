@@ -84,7 +84,7 @@ const BankDetail = {
   <div v-else class="loading">加载中...</div>`,
 
   setup() {
-    const route = Vue.useRoute()
+    const route = VueRouter.useRoute()
     const bank = Vue.ref(null)
     const latest = Vue.ref(null)
     const allStats = Vue.ref([])
