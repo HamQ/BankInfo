@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-季度补充数据同步 — 数位存款 + 逾放资料
-根据实际 Excel 结构解析
+季度补充数据同步 — 数位存款 + 逾放资料 (v5)
+NPL 解析器重写：适配实际 Excel 结构（原始财务数据 → 计算比率）
 """
 import os, sys, re, io, zipfile, ssl
 from datetime import date
@@ -18,16 +18,19 @@ SOURCES = {
         "url": "https://www.banking.gov.tw/ch/home.jsp?id=591&parentpath=0,590&mcustomize=multimessage_view.jsp&dataserno=201911270001&dtable=Disclosure",
         "table": "quarterly_digital_acct_stats",
         "desc": "数位存款帐户",
+        "min_year": 113,
+        "has_unique": True,
     },
     "npl": {
         "url": "https://www.banking.gov.tw/ch/home.jsp?id=591&parentpath=0,590&mcustomize=multimessage_view.jsp&dataserno=201202130001&dtable=Disclosure",
         "table": "quarterly_npl_stats",
         "desc": "逾放资料",
+        "min_year": 110,
+        "has_unique": True,
     },
 }
 
 USER_AGENT = "Mozilla/5.0 (compatible; BankInfoBot/1.0)"
-MIN_ROC_YEAR = 113
 
 def ssl_ctx():
     ctx = ssl.create_default_context()
@@ -40,8 +43,7 @@ def fetch(url):
     with urlopen(req, context=ssl_ctx(), timeout=30) as r:
         return r.read().decode("utf-8")
 
-def find_zips(html, min_year=MIN_ROC_YEAR):
-    """提取所有 ZIP URL，匹配 YYYQN 季度格式"""
+def find_zips_digital(html, min_year):
     pattern = r'(https?://[^"\s]*?\.zip)'
     urls = re.findall(pattern, html)
     results = []
@@ -55,24 +57,40 @@ def find_zips(html, min_year=MIN_ROC_YEAR):
             results.append((date(y + 1911, month, 1), u))
     return sorted(results, reverse=True)
 
-def find_zips_npl(html, min_year=MIN_ROC_YEAR):
-    """NPL 页面: URL 含附件三(含URL编码)且文件名含年份"""
-    pattern = r'(https?://[^"\s]*?(?:附件三|%E9%99%84%E4%BB%B6%E4%B8%89)[^"\s]*?\.zip)'
+def find_zips_npl(html, min_year):
+    pattern = r'(https?://[^"\s]*?\.zip)'
     urls = re.findall(pattern, html)
     results = []
+    seen = set()
     for u in urls:
-        # 尝试从 URL 提取年份季度: 114Q4 或 114 年 Q4
-        m = re.search(r'(\d{2,3})Q(\d)', u)
-        if not m:
-            m = re.search(r'/(\d{2,3})(\d{2})[._]', u)  # 如 /11401_
+        y, mo = None, None
+        
+        m = re.search(r'(\d{2,3})[_-](\d{2})', u)
         if m:
-            y, q = int(m.group(1)), int(m.group(2))
-            if q > 4:  # 可能是月份 01-12
-                q = (q - 1) // 3 + 1
-            if y < min_year or q < 1 or q > 4:
-                continue
-            month = (q - 1) * 3 + 1
-            results.append((date(y + 1911, month, 1), u))
+            y, mo = int(m.group(1)), int(m.group(2))
+        
+        if y is None:
+            m = re.search(r'(\d{3})(\d{2})(?:\(\d+\))?\.zip', u)
+            if m:
+                y, mo = int(m.group(1)), int(m.group(2))
+            else:
+                m = re.search(r'(\d{2})(\d{2})(?:\(\d+\))?\.zip', u)
+                if m:
+                    y2, mo2 = int(m.group(1)), int(m.group(2))
+                    if y2 >= 90:
+                        y, mo = y2, mo2
+        
+        if y is None or mo is None:
+            continue
+        if y < min_year or mo < 1 or mo > 12:
+            continue
+        
+        rq = date(y + 1911, mo, 1)
+        key = rq.isoformat()
+        if key not in seen:
+            seen.add(key)
+            results.append((rq, u))
+    
     return sorted(results, reverse=True)
 
 def download_zip(url):
@@ -81,158 +99,187 @@ def download_zip(url):
     with urlopen(req, context=ssl_ctx(), timeout=60) as r:
         return r.read()
 
-def parse_digital_acct(zip_bytes, fallback_url):
-    """解析数位存款 Excel — 实际格式:
-    标题行: 數位存款帳戶開戶數統計
-    日期行: 中華民國105年12月
-    表头: (空白) | 第一類帳戶 | 第二類帳戶 | 第三類帳戶 | 合計
-    数据行: 004 臺銀 | 201 | 197 | 0 | 398
-    """
+def read_excel_from_zip(zip_bytes):
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        # ZIP 内文件名可能是乱码 (Big5)，按扩展名找
-        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx") or n.endswith(".xls")]
-        if not xlsx_files:
-            # 尝试 .ods
-            ods_files = [n for n in zf.namelist() if n.endswith(".ods")]
-            if ods_files:
-                return None, [], "ODS 格式暂不支持，请手动转换: " + ods_files[0]
-            return None, [], "ZIP 内无 Excel 文件: " + ", ".join(zf.namelist()[:5])
-        with zf.open(xlsx_files[0]) as f:
-            wb = openpyxl.load_workbook(f, data_only=True)
+        names = zf.namelist()
+        
+        for n in names:
+            if n.endswith(".xlsx"):
+                with zf.open(n) as f:
+                    return openpyxl.load_workbook(f, data_only=True), "xlsx"
+        
+        for n in names:
+            if n.endswith(".xls"):
+                import xlrd
+                with zf.open(n) as f:
+                    return xlrd.open_workbook(file_contents=f.read()), "xls"
+        
+        for n in names:
+            if n.endswith(".ods"):
+                import pandas as pd
+                with zf.open(n) as f:
+                    return pd.read_excel(io.BytesIO(f.read()), engine="odf"), "ods"
+        
+        return None, "ZIP 内无 Excel 文件: " + ", ".join(names[:5])
 
-    ws = wb[wb.sheetnames[0]]
-    
-    # 找日期: "中華民國105年12月"
-    rq = None
-    for row in ws.iter_rows(min_row=1, max_row=5, max_col=5, values_only=True):
+def iter_excel_rows(wb, fmt):
+    if fmt == "xlsx":
+        ws = wb[wb.sheetnames[0]]
+        return [[c for c in row] for row in ws.iter_rows(min_row=1, max_row=ws.max_row, values_only=True)]
+    elif fmt == "xls":
+        sh = wb.sheet_by_index(0)
+        return [[sh.cell_value(r, c) for c in range(sh.ncols)] for r in range(sh.nrows)]
+    else:
+        df = wb
+        return [list(df.columns)] + df.values.tolist()
+
+def find_report_date(rows):
+    for row in rows[:8]:
         for c in row:
             if c and isinstance(c, str):
                 m = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月', str(c))
                 if m:
                     y, mo = int(m.group(1)), int(m.group(2))
-                    rq = date(y + 1911, mo, 1)
-                    break
-        if rq:
-            break
+                    return date(y + 1911, mo, 1)
+    return None
+
+def parse_digital_acct(zip_bytes, fallback_url):
+    """解析数位存款 Excel — 列A是银行全名"""
+    wb, fmt = read_excel_from_zip(zip_bytes)
+    if wb is None:
+        return None, [], fmt
+    
+    rows = iter_excel_rows(wb, fmt)
+    rq = find_report_date(rows)
     if not rq:
         return None, [], "未找到报告月份"
-
-    rows = []
-    for row in ws.iter_rows(min_row=6, max_row=ws.max_row, max_col=5, values_only=True):
+    
+    def ti(v):
+        if v is None: return None
+        try: return int(float(str(v).replace(",", "")))
+        except: return None
+    
+    SKIP_KW = ["数位", "數位", "中华民国", "中華民國", "单位:", "單位:", "第一类", "第一類", "第二类", "第二類", "统计", "統計"]
+    
+    data_rows = []
+    for row in rows:
+        if len(row) < 2:
+            continue
         col0 = row[0]
-        if not col0 or not isinstance(col0, str):
+        if col0 is None:
             continue
-        col0 = col0.strip()
+        col0_str = str(col0).strip()
         
-        # DEBUG: 打印前5行第一列内容
-        if len(rows) < 5:
-            print(f"    DEBUG row: [{col0}]", flush=True)
-        
-        # 跳过汇总行
-        if "總計" in col0 or "合计" in col0:
+        if not col0_str:
+            continue
+        if any(kw in col0_str for kw in SKIP_KW):
+            continue
+        if "总计" in col0_str or "總計" in col0_str or "合计" in col0_str:
+            continue
+        if col0_str.isdigit():
             continue
         
-        # 提取银行代码: "004 臺銀" → code=004
-        m = re.match(r'^(\d{3})\s', col0)
-        if not m:
-            continue
-        code = m.group(1)
-        
-        def ti(v):
-            if v is None: return None
-            try: return int(float(str(v).replace(",", "")))
-            except: return None
-        
-        rows.append({
-            "code": code,
+        data_rows.append({
+            "name": col0_str,
             "type1_accounts": ti(row[1]),
             "type2_accounts": ti(row[2]),
-            "type3_accounts": ti(row[3]),
-            "total_accounts": ti(row[4]),
+            "type3_accounts": ti(row[3]) if len(row) > 3 else None,
+            "total_accounts": ti(row[4]) if len(row) > 4 else None,
         })
     
-    return rq, rows, None
+    return rq, data_rows, None
 
 def parse_npl(zip_bytes, fallback_url):
-    """解析逾放资料 Excel"""
-    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        xlsx_files = [n for n in zf.namelist() if n.endswith(".xlsx") or n.endswith(".xls")]
-        if not xlsx_files:
-            return None, [], "ZIP 内无 Excel"
-        with zf.open(xlsx_files[0]) as f:
-            wb = openpyxl.load_workbook(f, data_only=True)
-
-    ws = wb[wb.sheetnames[0]]
+    """解析逾放资料 Excel — 实际结构:
+    银行别 | 存款 | 税前盈余(累计) | 放款总额 | 逾期放款总额 | 备抵呆帐 | ...
+    逾放比率 = 逾期放款 / 放款总额 * 100
+    备抵覆盖率 = 备抵呆帐 / 逾期放款 * 100
+    单位: 百万元
+    """
+    wb, fmt = read_excel_from_zip(zip_bytes)
+    if wb is None:
+        return None, [], fmt
     
-    # 找日期
-    rq = None
-    for row in ws.iter_rows(min_row=1, max_row=5, max_col=10, values_only=True):
-        for c in row:
-            if c and isinstance(c, str):
-                m = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月', str(c))
-                if m:
-                    y, mo = int(m.group(1)), int(m.group(2))
-                    rq = date(y + 1911, mo, 1)
-                    break
-        if rq:
-            break
+    rows = iter_excel_rows(wb, fmt)
+    rq = find_report_date(rows)
     if not rq:
         return None, [], "未找到报告月份"
-
-    rows = []
-    for row in ws.iter_rows(min_row=5, max_row=ws.max_row, max_col=5, values_only=True):
-        col0 = row[0]
-        if not col0 or not isinstance(col0, str):
+    
+    def ti(v):
+        if v is None: return None
+        try: return int(float(str(v).replace(",", "")))
+        except: return None
+    
+    SKIP_KW = ["总计", "總計", "合计", "银行别", "銀行別", "存款", "税前", "稅前", "放款", "逾期", "备抵", "備抵",
+                "统计", "統計", "月份", "单位:", "單位:", "申报", "申報"]
+    
+    data_rows = []
+    for row in rows:
+        if len(row) < 6:
             continue
-        col0 = col0.strip()
-        if "總計" in col0 or "合计" in col0:
+        col0 = str(row[0]).strip() if row[0] is not None else ""
+        if not col0 or len(col0) < 2:
+            continue
+        if any(kw in col0 for kw in SKIP_KW):
+            continue
+        # 银行名至少包含一个银行相关汉字
+        if not any(c in col0 for c in ["银行", "銀行", "金库", "金庫", "储蓄", "儲蓄", "信用", "商业", "商業", "農會", "渔會", "漁會"]):
             continue
         
-        # 提取银行代码
-        m = re.match(r'^(\d{3})\s', col0)
-        if not m:
-            continue
-        code = m.group(1)
+        total_loans = ti(row[3])       # 放款总额
+        overdue_loans = ti(row[4])     # 逾期放款总额
+        loan_allowance = ti(row[5])    # 备抵呆帐
         
-        def tn(v):
-            if v is None: return None
-            try: return round(float(str(v).replace(",", "")), 2)
-            except: return None
+        # 计算比率 (百分比)
+        npl_ratio = None
+        if total_loans and overdue_loans and total_loans > 0:
+            npl_ratio = round(overdue_loans / total_loans * 100, 2)
         
-        # NPL Excel 结构: 银行 | 银行类型? | 逾放比率 | 覆盖率 | ...
-        rows.append({
-            "code": code,
-            "bank_type": str(row[1]) if row[1] else None,
-            "npl_ratio": tn(row[2]),
-            "coverage_ratio": tn(row[3]),
+        coverage_ratio = None
+        if overdue_loans and loan_allowance and overdue_loans > 0:
+            coverage_ratio = round(loan_allowance / overdue_loans * 100, 2)
+        
+        data_rows.append({
+            "name": col0,
+            "deposits": ti(row[1]),
+            "pre_tax_profit": ti(row[2]),
+            "total_loans": total_loans,
+            "overdue_loans": overdue_loans,
+            "loan_allowance": loan_allowance,
+            "npl_ratio": npl_ratio,
+            "coverage_ratio": coverage_ratio,
         })
     
-    return rq, rows, None
+    return rq, data_rows, None
 
-def run_source(supabase, cfg, code_to_id):
+def run_source(supabase, cfg, name_to_id):
     table = cfg["table"]
     desc = cfg["desc"]
-
-    existing = {r["report_quarter"] for r in supabase.table(table).select("report_quarter").execute().data}
+    min_year = cfg.get("min_year", 113)
+    has_unique = cfg.get("has_unique", True)
+    
+    # 获取已有的 (bank_id, report_quarter) 组合
+    existing_pairs = set()
+    for r in supabase.table(table).select("bank_id,report_quarter").execute().data:
+        existing_pairs.add((r["bank_id"], r["report_quarter"]))
+    
     print(f"\n{'='*50}")
-    print(f"{desc} — 现有 {len(existing)} 个季度")
-
+    print(f"{desc} — 现有 {len(existing_pairs)} 条记录")
+    
     html = fetch(cfg["url"])
     
-    # 选 Zip 查找函数
     if "npl" in table:
-        months = find_zips_npl(html)
+        months = find_zips_npl(html, min_year)
     else:
-        months = find_zips(html)
+        months = find_zips_digital(html, min_year)
     print(f"发现 {len(months)} 个季度")
-
+    
     new_count = 0
     for rq, zurl in months:
-        ms = rq.isoformat()
-        if ms in existing:
-            continue
         roc_y = rq.year - 1911
         roc_m = rq.month
+        rq_str = rq.isoformat()
+        
         print(f"  新季度: 民国{roc_y}年{roc_m}月")
         try:
             zb = download_zip(zurl)
@@ -244,14 +291,25 @@ def run_source(supabase, cfg, code_to_id):
             if pq is None:
                 print(f"    跳过: {err}")
                 continue
-
+            
+            pq_str = pq.isoformat()
+            inserted = 0
+            skipped_dup = 0
             for r in data_rows:
-                bid = code_to_id.get(r["code"])
+                bid = name_to_id.get(r["name"])
                 if not bid:
+                    if inserted < 3:
+                        print(f"    未匹配银行: {r['name']}")
                     continue
+                
+                pair = (bid, pq_str)
+                if pair in existing_pairs:
+                    skipped_dup += 1
+                    continue
+                
                 record = {
                     "bank_id": bid,
-                    "report_quarter": pq.isoformat(),
+                    "report_quarter": pq_str,
                     "source_url": zurl.replace(".zip", ".pdf"),
                 }
                 if "digital" in table:
@@ -264,17 +322,34 @@ def run_source(supabase, cfg, code_to_id):
                 else:
                     record.update({
                         "bank_type": r.get("bank_type"),
+                        "deposits": r.get("deposits"),
+                        "pre_tax_profit": r.get("pre_tax_profit"),
+                        "total_loans": r.get("total_loans"),
+                        "overdue_loans": r.get("overdue_loans"),
+                        "loan_allowance": r.get("loan_allowance"),
                         "npl_ratio": r.get("npl_ratio"),
                         "coverage_ratio": r.get("coverage_ratio"),
                     })
-                supabase.table(table).upsert(record, on_conflict="bank_id,report_quarter").execute()
-                new_count += 1
-
-            print(f"    入库 {len(data_rows)} 笔")
-            existing.add(ms)
+                
+                try:
+                    if has_unique:
+                        supabase.table(table).upsert(record, on_conflict="bank_id,report_quarter").execute()
+                    else:
+                        supabase.table(table).insert(record).execute()
+                    existing_pairs.add(pair)
+                    inserted += 1
+                except Exception as e:
+                    print(f"    单条失败 [{r['name']}]: {e}")
+            
+            if skipped_dup > 0:
+                print(f"    跳过 {skipped_dup} 条重复")
+            print(f"    入库 {inserted} 笔")
+            new_count += inserted
         except Exception as e:
+            import traceback
             print(f"    失败: {e}")
-
+            traceback.print_exc()
+    
     print(f"{desc} 完成，新增 {new_count} 笔")
 
 def main():
@@ -284,16 +359,22 @@ def main():
         print("请设置 SUPABASE_URL 和 SUPABASE_SERVICE_KEY")
         sys.exit(1)
     supabase = create_client(url, key)
-
-    resp = supabase.table("banks").select("id,code").execute()
-    code_to_id = {b["code"]: b["id"] for b in resp.data}
-    print(f"已加载 {len(code_to_id)} 家银行映射")
-
+    
+    resp = supabase.table("banks").select("id,code,name,short_name").execute()
+    name_to_id = {}
+    for b in resp.data:
+        name_to_id[b["name"]] = b["id"]
+        if b.get("short_name"):
+            name_to_id[b["short_name"]] = b["id"]
+    print(f"已加载 {len(name_to_id)} 家银行映射")
+    
     for name, cfg in SOURCES.items():
         try:
-            run_source(supabase, cfg, code_to_id)
+            run_source(supabase, cfg, name_to_id)
         except Exception as e:
+            import traceback
             print(f"{cfg['desc']} 整体失败: {e}")
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()
