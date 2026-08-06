@@ -186,6 +186,8 @@ const BankDetail = {
             { name: '备抵呆帐提足率', type: 'line', data: d.map(s => s.bad_debt_coverage_ratio), smooth: true, lineStyle: { color: '#8b5cf6' } }
           ]
         })
+      }
+
       
       // 点击图表跳转来源 (只绑定一次)
       chart.off('click')
@@ -195,6 +197,8 @@ const BankDetail = {
           if (src) window.open(src, '_blank')
         }
       })
+    }
+
 
     function trendChange(field) {
       if (allStats.value.length < 2) return ''
