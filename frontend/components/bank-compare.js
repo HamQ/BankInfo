@@ -1,37 +1,102 @@
 // ============================================
-// BankCompare 组件 — 银行对比页
+// BankCompare 组件 — 银行对比页 v2 (雷达图 + 趋势 + 指标表)
 // ============================================
 const BankCompare = {
   template: `
   <div>
     <div class="card">
-      <h2>银行对比</h2>
+      <h2>📊 银行对比</h2>
       <div class="compare-selector">
-        <select v-model="selectedBanks" multiple style="height:150px;min-width:240px">
-          <option v-for="b in banks" :value="b.id" :key="b.id">{{ b.name }}</option>
+        <select v-model="selectedBanks" multiple style="height:140px;min-width:260px">
+          <option v-for="b in banks" :value="b.id" :key="b.id">{{ b.short_name || b.name }}</option>
         </select>
-        <div style="font-size:12px;color:var(--gray-400)">
-          <div>Ctrl/Cmd + 点击选择 2~4 家</div>
-          <div style="margin-top:4px">已选: {{ selectedBanks.length }}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-left:12px">
+          <div>按住 Ctrl/Cmd 点击选择 2~4 家</div>
+          <div style="margin-top:4px">已选: <b style="color:var(--accent)">{{ selectedBanks.length }}</b></div>
+          <div v-if="selectedBanks.length > 4" style="color:var(--amber);margin-top:4px">建议不超过4家，雷达图更清晰</div>
         </div>
       </div>
-      <div class="filter-bar" style="margin-top:16px">
-        <button class="btn" :class="cmpMetric==='cards' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='cards'">流通卡数</button>
-        <button class="btn" :class="cmpMetric==='active' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='active'">有效卡率</button>
-        <button class="btn" :class="cmpMetric==='volume' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='volume'">签帐金额</button>
-        <button class="btn" :class="cmpMetric==='risk' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='risk'">逾期比率</button>
-        <button class="btn" :class="cmpMetric==='revolving' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='revolving'">循环信用余额</button>
-      </div>
-      <div class="chart-box" id="compare-chart"></div>
-      <div v-if="selectedBanks.length < 2" class="empty">请选择至少 2 家银行进行对比</div>
     </div>
+
+    <template v-if="selectedBanks.length >= 2">
+      <!-- 雷达图 -->
+      <div class="card">
+        <h2>🎯 最新月份雷达对比</h2>
+        <div class="chart-box" id="radar-chart" style="height:480px"></div>
+      </div>
+
+      <!-- 指标对比表 -->
+      <div class="card">
+        <h2>📋 关键指标一览 ({{ latestMonth }})</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>指标</th>
+                <th v-for="b in compareData" :key="b.bank_id" class="number">{{ b.name }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in metricRows" :key="r.key">
+                <td>{{ r.label }}</td>
+                <td v-for="b in compareData" :key="b.bank_id" class="number" :style="r.style(b)">
+                  {{ r.fmt(b[r.key]) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 趋势对比 -->
+      <div class="card">
+        <h2>📈 历史趋势对比</h2>
+        <div class="filter-bar">
+          <button class="btn" :class="cmpMetric==='cards' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='cards'">流通卡数</button>
+          <button class="btn" :class="cmpMetric==='active' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='active'">有效卡率</button>
+          <button class="btn" :class="cmpMetric==='volume' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='volume'">签帐金额</button>
+          <button class="btn" :class="cmpMetric==='revolving' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='revolving'">循环信用余额</button>
+          <button class="btn" :class="cmpMetric==='risk' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='risk'">逾期3月+比率</button>
+        </div>
+        <div class="chart-box" id="trend-chart"></div>
+      </div>
+    </template>
+    <div v-else class="card empty">请选择至少 2 家银行进行对比</div>
   </div>`,
 
   setup() {
     const banks = Vue.ref([])
     const selectedBanks = Vue.ref([])
     const cmpMetric = Vue.ref('cards')
-    const allData = Vue.ref({})
+    const compareData = Vue.ref([])
+
+    const metricRows = Vue.computed(() => [
+      { key: 'cards_in_circulation', label: '流通卡数', fmt: v => v ? (v/10000).toFixed(0)+'万' : '-',
+        style: b => ({}) },
+      { key: 'active_cards', label: '有效卡数', fmt: v => v ? (v/10000).toFixed(0)+'万' : '-',
+        style: b => ({}) },
+      { key: 'active_ratio', label: '有效卡率', fmt: v => v != null ? v.toFixed(1)+'%' : '-',
+        style: b => b.active_ratio != null ? { color: b.active_ratio < 50 ? 'var(--red)' : b.active_ratio < 65 ? 'var(--amber)' : 'var(--green)' } : {} },
+      { key: 'transaction_volume', label: '当月签帐金额', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
+        style: b => ({}) },
+      { key: 'revolving_balance', label: '循环信用余额', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
+        style: b => ({}) },
+      { key: 'cash_advance_volume', label: '预借现金', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
+        style: b => ({}) },
+      { key: 'delinquency_3m_ratio', label: '逾期3月+比率', fmt: v => v != null ? v.toFixed(2)+'%' : '-',
+        style: b => b.delinquency_3m_ratio > 1 ? { color: 'var(--red)' } : b.delinquency_3m_ratio > 0.5 ? { color: 'var(--amber)' } : { color: 'var(--green)' } },
+      { key: 'delinquency_6m_ratio', label: '逾期6月+比率', fmt: v => v != null ? v.toFixed(2)+'%' : '-',
+        style: b => ({}) },
+      { key: 'bad_debt_coverage_ratio', label: '呆帐覆盖率', fmt: v => v != null ? v.toFixed(1)+'%' : '-',
+        style: b => ({}) },
+    ])
+
+    const latestMonth = Vue.computed(() => {
+      if (!compareData.value.length) return ''
+      const d = new Date(compareData.value[0].report_month + 'T00:00:00')
+      const roc = d.getFullYear() - 1911
+      return '民国'+roc+'年'+(d.getMonth()+1)+'月 (公元'+d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')+')'
+    })
 
     Vue.onMounted(async () => {
       const { data: bd } = await supabase.from('banks').select('*').order('code')
@@ -44,73 +109,131 @@ const BankCompare = {
 
     async function loadAndRender() {
       if (selectedBanks.value.length < 2) return
-      const el = document.getElementById('compare-chart')
-      if (!el) return
 
-      // 加载每家银行的数据
-      const promises = selectedBanks.value.map(id =>
+      // Latest data for radar + table
+      const latestPromises = selectedBanks.value.map(id =>
         supabase.from('monthly_credit_stats')
-          .select('*')
+          .select('*, banks(short_name)')
           .eq('bank_id', id)
-          .order('report_month', { ascending: true })
+          .order('report_month', { ascending: false })
+          .limit(1)
       )
-      const results = await Promise.all(promises)
+      const latestResults = await Promise.all(latestPromises)
+      const cd = []
+      for (let i = 0; i < latestResults.length; i++) {
+        if (latestResults[i].data && latestResults[i].data.length) {
+          const s = latestResults[i].data[0]
+          s.name = s.banks?.short_name || banks.value.find(b => b.id === selectedBanks.value[i])?.short_name || ''
+          s.active_ratio = s.cards_in_circulation > 0 ? parseFloat((s.active_cards / s.cards_in_circulation * 100).toFixed(2)) : null
+          cd.push(s)
+        }
+      }
+      compareData.value = cd
+      await Vue.nextTick()
+      renderRadar()
+
+      // History for trend
+      const trendPromises = selectedBanks.value.map(id =>
+        supabase.from('monthly_credit_stats').select('*').eq('bank_id', id).order('report_month', { ascending: true })
+      )
+      const trendResults = await Promise.all(trendPromises)
+      const byBank = {}
+      for (let i = 0; i < trendResults.length; i++) {
+        byBank[selectedBanks.value[i]] = trendResults[i].data || []
+      }
+      await Vue.nextTick()
+      renderTrend(byBank)
+    }
+
+    function renderRadar() {
+      const el = document.getElementById('radar-chart')
+      if (!el || !compareData.value.length) return
+      const chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark')
+
+      const metrics = [
+        { key: 'cards_in_circulation', label: '流通卡数', max: 1e7 },
+        { key: 'active_ratio', label: '有效卡率', max: 100 },
+        { key: 'transaction_volume', label: '签帐金额', max: 1e10 },
+        { key: 'revolving_balance', label: '循环信用', max: 5e9 },
+        { key: 'delinquency_3m_ratio', label: '逾期比率↓', max: 3, invert: true },
+      ]
+
+      const indicator = metrics.map(m => ({ name: m.label, max: 100 }))
+      const colors = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#fb923c']
+      const seriesData = compareData.value.map((b, i) => ({
+        name: b.name,
+        value: metrics.map(m => {
+          let raw = b[m.key] || 0
+          if (m.invert) raw = m.max - Math.min(raw, m.max)
+          return Math.round(Math.min(raw / m.max * 100, 100))
+        }),
+        itemStyle: { color: colors[i % colors.length] },
+        lineStyle: { color: colors[i % colors.length] },
+        areaStyle: { color: colors[i % colors.length] + '20' }
+      }))
+
+      chart.setOption({
+        tooltip: {},
+        legend: { data: seriesData.map(s => s.name), bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 } },
+        radar: {
+          indicator,
+          center: ['50%', '46%'],
+          radius: '62%',
+          axisName: { color: '#94a3b8', fontSize: 10 }
+        },
+        series: [{ type: 'radar', data: seriesData }]
+      }, true)
+    }
+
+    function renderTrend(byBank) {
+      const el = document.getElementById('trend-chart')
+      if (!el) return
+      const chart = echarts.getInstanceByDom(el) || echarts.init(el, 'dark')
 
       const metricMap = {
-        cards: 'cards_in_circulation',
-        active: 'active_ratio',
-        volume: 'transaction_volume',
-        risk: 'delinquency_3m_ratio',
-        revolving: 'revolving_balance'
+        cards: { key: 'cards_in_circulation', name: '流通卡数' },
+        active: { key: 'active_ratio', name: '有效卡率' },
+        volume: { key: 'transaction_volume', name: '签帐金额' },
+        revolving: { key: 'revolving_balance', name: '循环信用余额' },
+        risk: { key: 'delinquency_3m_ratio', name: '逾期3月+比率' },
       }
-      const metric = metricMap[cmpMetric.value]
-      const unitMap = {
-        cards: { name: '张数', fmt: v => (v/10000).toFixed(0)+'万' },
-        active: { name: '%', fmt: v => v.toFixed(1)+'%' },
-        volume: { name: '千元', fmt: v => (v/100000).toFixed(1)+'亿' },
-        risk: { name: '%', fmt: v => v.toFixed(2)+'%' },
-        revolving: { name: '千元', fmt: v => (v/100000).toFixed(1)+'亿' },
-      }
-      const unit = unitMap[cmpMetric.value]
-      const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+      const m = metricMap[cmpMetric.value]
 
-      // 找到所有月份的共同集合
       const monthSet = new Set()
-      results.forEach((r, i) => {
-        if (r.data) r.data.forEach(s => monthSet.add(s.report_month))
-      })
+      Object.values(byBank).forEach(arr => arr.forEach(s => monthSet.add(s.report_month)))
       const months = [...monthSet].sort()
+      const colors = ['#38bdf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#fb923c']
 
-      const series = results.map((r, i) => {
-        const name = banks.value.find(b => b.id === selectedBanks.value[i])?.short_name || '银行' + (i+1)
+      const series = selectedBanks.value.map((id, i) => {
+        const name = banks.value.find(b => b.id === id)?.short_name || ''
         const dataMap = {}
-        if (r.data) r.data.forEach(s => {
-          let val = s[metric]
-          if (metric === 'active_ratio' && s.cards_in_circulation > 0) {
-            val = parseFloat(((s.active_cards / s.cards_in_circulation) * 100).toFixed(2))
+        byBank[id].forEach(s => {
+          let val = s[m.key]
+          if (m.key === 'active_ratio' && s.cards_in_circulation > 0) {
+            val = parseFloat((s.active_cards / s.cards_in_circulation * 100).toFixed(2))
           }
           dataMap[s.report_month] = val
         })
         return {
           name, type: 'line',
-          data: months.map(m => dataMap[m] ?? null),
+          data: months.map(mo => dataMap[mo] ?? null),
           smooth: true,
+          symbol: 'circle', symbolSize: 4,
           lineStyle: { width: 2, color: colors[i % colors.length] },
           itemStyle: { color: colors[i % colors.length] }
         }
       })
 
-      const chart = echarts.getInstanceByDom(el) || echarts.init(el)
       chart.setOption({
         tooltip: { trigger: 'axis' },
-        legend: { data: series.map(s => s.name), top: 0 },
-        grid: { left: 80, right: 40, top: 50, bottom: 30 },
-        xAxis: { type: 'category', data: months.map(m => rocDate(m)), axisLabel: { rotate: 45, fontSize: 11 } },
-        yAxis: { type: 'value', name: unit.name, axisLabel: { formatter: unit.fmt } },
+        legend: { data: series.map(s => s.name), bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 } },
+        grid: { left: 80, right: 40, top: 20, bottom: 40 },
+        xAxis: { type: 'category', data: months.map(mo => rocDate(mo)), axisLabel: { rotate: 45, fontSize: 10, color: '#94a3b8' } },
+        yAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94a3b8' } },
         series
-      })
+      }, true)
     }
 
-    return { banks, selectedBanks, cmpMetric }
+    return { banks, selectedBanks, cmpMetric, compareData, metricRows, latestMonth }
   }
 }
