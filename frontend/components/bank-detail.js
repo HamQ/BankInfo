@@ -16,7 +16,7 @@ const BankDetail = {
       <div style="text-align:right" v-if="latest">
         <div style="font-size:12px;color:var(--gray-400)">最新数据: {{ latestMonth }}</div>
         <div style="font-size:12px;color:var(--gray-400);margin-top:2px">
-          来源: <a :href="latest.source_url" target="_blank" v-if="latest.source_url">金管局</a>
+          来源: <a :href="sourcePdfUrl" target="_blank" v-if="latest.source_url">金管局</a>
         </div>
       </div>
     </div>
@@ -224,6 +224,11 @@ const BankDetail = {
       return c.startsWith('+') ? 'up' : 'down'
     }
 
+    
+    const sourcePdfUrl = Vue.computed(() => {
+      const src = latest.value?.source_url
+      return src ? src.replace('.zip', '.pdf') : ''
+    })
     const latestMonth = Vue.computed(() => {
       if (!allStats.value.length) return ''
       return rocDate(allStats.value[allStats.value.length - 1].report_month)
@@ -231,7 +236,7 @@ const BankDetail = {
 
     return {
       bank, latest, allStats, products, bankInsights, activeChart,
-      latestMonth, trendChange, trendDir,
+      latestMonth, trendChange, trendDir, sourcePdfUrl,
       fmtNumber, fmtAmount, fmtPercent
     }
   }
