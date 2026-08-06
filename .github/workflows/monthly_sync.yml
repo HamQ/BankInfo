@@ -2,15 +2,13 @@ name: 金管局月报自动同步
 
 on:
   schedule:
-    # 每月 5 号 UTC 00:00 自动运行（金管局通常在月初发布上月数据）
     - cron: "0 0 5 * *"
   workflow_dispatch:
-    # 允许手动触发
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: 检出代码
@@ -35,3 +33,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/fetch_cash_stats.py
+
+      - name: 同步季度数据 (数位存款 + 逾放)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/fetch_quarterly.py
