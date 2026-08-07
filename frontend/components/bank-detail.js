@@ -59,9 +59,25 @@ const BankDetail = {
 
     <!-- 卡产品 -->
     <div class="card" v-if="products.length">
-      <h2>💳 卡片产品 ({{ products.length }})</h2>
+      <h2>💳 卡片产品 ({{ filteredProducts.length }} / {{ products.length }})</h2>
+
+      <!-- Network 快速筛选标签 -->
+      <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap">
+        <span class="p-tag" style="cursor:pointer" :style="productFilter===''?{opacity:1,outline:'2px solid var(--accent)'}:{opacity:0.5}" @click="productFilter=''">全部 {{ products.length }}</span>
+        <span v-for="n in networkCounts" :key="n.name" class="p-tag" :class="n.name.toLowerCase()" style="cursor:pointer" :style="productFilter===n.name?{opacity:1,outline:'2px solid var(--accent)'}:{opacity:0.5}" @click="productFilter = (productFilter===n.name ? '' : n.name)">{{ n.name }} {{ n.count }}</span>
+      </div>
+
+      <!-- 搜索 + 排序 -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <input v-model="productSearch" placeholder="🔍 搜索卡片名称..." style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);flex:1;min-width:150px;font-size:13px">
+        <select v-model="productSort" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px">
+          <option value="name">按名称排序</option>
+          <option value="network">按 Network 分组</option>
+        </select>
+      </div>
+
       <div class="product-grid">
-        <div class="product-card" v-for="p in products" :key="p.id">
+        <div class="product-card" v-for="p in filteredProducts" :key="p.id">
           <div class="p-name">{{ p.name }}</div>
           <div class="p-tags">
             <span v-if="p.network" class="p-tag" :class="p.network.toLowerCase()">{{ p.network }}</span>
@@ -72,6 +88,7 @@ const BankDetail = {
           <div style="font-size:11px;margin-top:4px" v-if="p.source_page"><a :href="p.source_page" target="_blank" style="color:var(--accent);text-decoration:none">🔗 来源</a></div>
         </div>
       </div>
+      <div v-if="!filteredProducts.length" style="text-align:center;padding:20px;color:var(--text-muted)">没有匹配的卡片</div>
     </div>
 
     <!-- 数位存款帐户 (季度) -->
@@ -113,8 +130,37 @@ const BankDetail = {
     const products = Vue.ref([])
     const bankInsights = Vue.ref([])
     const digitalData = Vue.ref([])
+    const productFilter = Vue.ref('')
+    const productSearch = Vue.ref('')
+    const productSort = Vue.ref('name')
     const nplData = Vue.ref([])
     const activeChart = Vue.ref('cards')
+
+    const networkCounts = Vue.computed(() => {
+      const counts = {}
+      products.value.forEach(p => {
+        const n = p.network || 'Unknown'
+        counts[n] = (counts[n] || 0) + 1
+      })
+      return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count)
+    })
+
+    const filteredProducts = Vue.computed(() => {
+      let list = [...products.value]
+      if (productFilter.value) {
+        list = list.filter(p => (p.network || 'Unknown') === productFilter.value)
+      }
+      if (productSearch.value) {
+        const q = productSearch.value.toLowerCase()
+        list = list.filter(p => p.name.toLowerCase().includes(q))
+      }
+      if (productSort.value === 'network') {
+        list.sort((a,b) => (a.network||'').localeCompare(b.network||''))
+      } else {
+        list.sort((a,b) => a.name.localeCompare(b.name))
+      }
+      return list
+    })
 
     Vue.onMounted(async () => {
       const bankId = route.params.id
@@ -289,7 +335,7 @@ const BankDetail = {
     })
 
     return {
-      bank, latest, allStats, products, bankInsights, digitalData, nplData, activeChart,
+      bank, latest, allStats, products, bankInsights, digitalData, nplData, activeChart, productFilter, productSearch, productSort, networkCounts, filteredProducts,
       latestMonth, trendChange, trendDir, sourcePdfUrl,
       fmtNumber, fmtAmount, fmtPercent
     }
