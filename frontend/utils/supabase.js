@@ -22,6 +22,10 @@ function fmtPercent(val) {
   return val.toFixed(2) + "%"
 }
 
+function westernDate(isoDate) {
+  const d = new Date(isoDate + "T00:00:00")
+  return d.getFullYear() + "." + (d.getMonth() + 1).toString().padStart(2, "0")
+}
 function rocDate(isoDate) {
   const d = new Date(isoDate + "T00:00:00")
   const roc = d.getFullYear() - 1911
