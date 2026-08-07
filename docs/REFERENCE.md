@@ -1,7 +1,7 @@
 # 台湾信用卡情报雷达 — 参考手册
 
-> 最后更新: 2026-08-06  
-> Phase 1-3 完成状态
+> 最后更新: 2026-08-07 Phase 4B
+> Phase 1-4A 完成 | 200张卡 · 13家银行 · 全network识别
 
 ---
 
@@ -10,116 +10,204 @@
 | 项目 | 值 |
 |------|-----|
 | **Supabase URL** | `https://hpuatpbfbfxeyljfbjgs.supabase.co` |
-| **Supabase Anon Key** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwdWF0cGJmYmZ4ZXlsamZiamdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NzY2MzIsImV4cCI6MjEwMTU1MjYzMn0.Hd66KOtwvk1Dc0vyG12dB5nUyfhWj4_gqoRdfoyeb-8` |
+| **Supabase Anon Key** | `eyJhbGci...oyeb-8` (公开读取) |
+| **Supabase Service Key** | `eyJhbGci...H85ChY` (写入, 保密!) |
+| **DeepSeek API Key** | `sk-30d87dba71aa437bb2ed4dde74cb85c9` (保密!) |
 | **GitHub Pages** | `https://hamq.github.io/BankInfo/` |
 | **GitHub Repo** | `https://github.com/HamQ/BankInfo` |
-| **数据源** | 金管局 (banking.gov.tw) |
+| **数据源** | 金管局 banking.gov.tw |
 
 ---
 
 ## 二、数据库表
 
-| 表名 | 用途 | 当前记录数 |
-|------|------|-----------|
+| 表名 | 用途 | 记录数 |
+|------|------|--------|
 | `banks` | 银行基础信息 | 38 |
-| `monthly_credit_stats` | 信用卡月报 | ~12×32 |
-| `monthly_cash_stats` | 现金卡月报 | ~12×32 |
-| `quarterly_digital_acct_stats` | 数位存款季度统计 | 315 |
-| `quarterly_npl_stats` | 逾放资料月度统计 | 826 |
-| `card_products` | 卡片产品 | 待填充 |
-| `insights` | 洞察/新闻 | 待填充 |
+| `monthly_credit_stats` | 信用卡月报 | ~400 |
+| `monthly_cash_stats` | 现金卡月报 | ~400 |
+| `quarterly_digital_acct_stats` | 数位存款季度 | 315 |
+| `quarterly_npl_stats` | 逾放资料 | 826 |
+| `card_products` | 卡片产品 | **200** |
+| `insights` | 洞察/新闻 (RFP卖点) | 82 |
 
 ---
 
 ## 三、脚本清单
 
-| 脚本 | 用途 | 频率 |
-|------|------|------|
-| `seed_banks.py` | 初始化银行数据 | 仅首次 |
-| `fetch_credit_stats.py` | 信用卡月报同步 | 每月/GitHub Actions |
-| `fetch_cash_stats.py` | 现金卡月报同步 | 每月/GitHub Actions |
-| `fetch_quarterly.py` | 数位存款 + 逾放资料同步 | 每季/GitHub Actions |
+### 3.1 数据同步脚本
 
-**v5 更新 (2026-08-06):**
-- 修复 Excel 解析：银行名匹配（列A是银行全名非代码）
-- 支持三种 Excel 格式：`.xlsx` (openpyxl) / `.xls` (xlrd) / `.ods` (pandas)
-- NPL URL 匹配覆盖全部 82 个 ZIP
-- NPL 解析器重写：从原始财务数据计算逾放比率和备抵覆盖率
-- 去重机制：基于 `(bank_id, report_quarter)` 的精确去重
+| 脚本 | 用途 | 触发频率 | 依赖 |
+|------|------|----------|------|
+| `seed_banks.py` | 初始化银行数据 | 仅首次 | supabase |
+| `fetch_credit_stats.py` | 信用卡月报 | 每月/GitHub Actions | openpyxl,requests,supabase |
+| `fetch_cash_stats.py` | 现金卡月报 | 每月/GitHub Actions | 同上 |
+| `fetch_quarterly.py` | 季度数据(数位存款+逾放) | 每季/GitHub Actions | 同上+pandas+xlrd |
 
----
+### 3.2 卡片爬虫
 
-## 四、迁移文件
+| 脚本 | 用途 | 触发频率 | 依赖 |
+|------|------|----------|------|
+| `card_crawler.py` | AI 爬取银行官网信用卡 | 按需/GitHub Actions | **Playwright+Chromium+DeepSeek** |
 
-| 文件 | 说明 |
+### 3.3 辅助脚本
+
+| 脚本 | 用途 |
 |------|------|
-| `001_initial_schema.sql` | 建表 + RLS 策略 |
-| `002_grant_permissions.sql` | 授权 anon key 读取权限 |
-| `003_fix_npl_schema.sql` | 修复 NPL 表精度 + 新增原始数据列 + 唯一约束 |
+| `add_extra_banks.py` | 补充新增银行 |
+| `fix_source_urls.py` | 修复数据出处链接 |
+| `_gen.py` | 代码生成辅助 |
 
 ---
 
-## 五、前端架构
+## 四、GitHub Actions 自动化
 
-```
-BankInfo/
-├── index.html                         ← 入口 (Vue SPA)
-├── frontend/
-│   ├── app.js                         ← Vue Router 配置
-│   ├── utils/supabase.js              ← Supabase 客户端
-│   ├── styles/main.css                ← 全局样式 (Dark Premium v2 + Mobile)
-│   └── components/
-│       ├── dashboard.js               ← 首页仪表盘
-│       ├── bank-detail.js             ← 银行详情页
-│       └── bank-compare.js            ← 银行对比页 (雷达图+表格+趋势)
-├── scripts/                           ← Python 数据脚本
-├── supabase/migrations/               ← SQL 建表迁移
-└── docs/                              ← 文档
-```
+### 4.1 月度同步 (自动)
+**文件**: `.github/workflows/monthly_sync.yml`
+- **触发**: 每月5日0:00 UTC + 手动 `workflow_dispatch`
+- **执行**: `fetch_credit_stats.py` → `fetch_cash_stats.py` → `fetch_quarterly.py`
+- **Secrets 需要**: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
 
----
+### 4.1B 全量更新 (手动触发)
+**文件**: `.github/workflows/sync_all.yml`
+- **触发**: 手动 `workflow_dispatch`
+- **执行**: 月度同步 → 季度 → 卡片爬虫 → 洞察生成 (全串联)
+- **Secrets 需要**: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
 
-## 六、Phase 3 完成项
+### 4.2 卡片爬虫 (手动触发)
 
-✅ 银行对比页 (雷达图 + 指标表 + 趋势线)  
-✅ 数位存款季度数据接入 (315 条)  
-✅ 逾放资料月度数据接入 (826 条, 110年1月-111年12月)  
-✅ GitHub Actions 自动运行季度脚本  
-✅ 银行详情页图表 + 浅色主题  
-✅ 移动端响应式适配  
+**触发方式**:
+1. 打开 https://github.com/HamQ/BankInfo/actions/workflows/card_crawl.yml
+2. 点击 "Run workflow" 按钮
+3. 可选填入银行代码(如 013 808 812)，留空=全部
+4. 点击绿色 "Run workflow" 确认执行
 
----
+**文件**: `.github/workflows/card_crawl.yml`
+**文件**: `.github/workflows/card_crawl.yml`
+- **触发**: 手动 `workflow_dispatch`，可选填入银行代码
+- **执行**: `card_crawler.py`（全部或指定银行）
+- **Secrets 需要**: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
+- **注意**: 需要 Playwright + Chromium (workflow 中自动安装)
 
-## 七、Phase 4 计划 (待讨论)
+### 4.3 需要配置的 GitHub Secrets
 
-1. **AI 爬虫** — DeepSeek API 爬取银行官网卡产品信息
-2. **卡产品自动识别** — Visa/Mastercard/JCB Logo + 权益分析
-3. **洞察模块** — 自动生成 RFP 卖点提示
-4. **PWA 离线支持** — Service Worker 缓存
+在 `https://github.com/HamQ/BankInfo/settings/secrets/actions` 添加：
+- `SUPABASE_URL` = `https://hpuatpbfbfxeyljfbjgs.supabase.co`
+- `SUPABASE_SERVICE_KEY` = (service_role key)
 
 ---
 
-## 八、本地运行
+## 五、本地运行
 
 ```powershell
 # 环境变量 (cmd)
 set SUPABASE_URL=https://hpuatpbfbfxeyljfbjgs.supabase.co
-set SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwdWF0cGJmYmZ4ZXlsamZiamdzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTk3NjYzMiwiZXhwIjoyMTAxNTUyNjMyfQ.evBVkkGaUCrYe0pd4rEcm9-U-xNfg822gFXSSH85ChY
+set SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
+# 安装依赖
 pip install -r scripts/requirements.txt
+
+# 基础数据
 python scripts/seed_banks.py              # 仅首次
 python scripts/fetch_credit_stats.py      # 信用卡月报
 python scripts/fetch_cash_stats.py        # 现金卡月报
 python scripts/fetch_quarterly.py         # 季度补充数据
+
+# 卡片产品爬虫 (需要 Playwright)
+pip install playwright
+python -m playwright install chromium
+python scripts/card_crawler.py            # 全部银行
+python scripts/card_crawler.py 013 808    # 指定银行
 ```
 
 ---
 
-## 九、注意事项
+## 六、前端架构
 
-1. **民国/公元** — 前端同时显示两种记年法 (如 115年/2026年)
-2. **金管局 SSL** — Python 脚本已忽略证书验证
-3. **RLS** — 所有表公开可读，`service_role` 可写
-4. **source_url** — 脚本优先存 PDF URL (`.zip` → `.pdf`)
-5. **缓存** — JS 引用带 `?v=N` 版本号
-6. **银行代码** — seed_banks.py 部分代码可能有误（101/102/103/108），季度脚本用名称匹配不受影响
+```
+BankInfo/
+├── index.html                    ← 入口 (Vue 3 SPA, Hash Router)
+├── frontend/
+│   ├── app.js                    ← Vue Router (Dashboard/Bank/Compare)
+│   ├── utils/supabase.js         ← Supabase 客户端
+│   ├── styles/main.css           ← 全局样式 (Dark Premium + Mobile)
+│   └── components/
+│       ├── dashboard.js          ← 首页仪表盘
+│       ├── bank-detail.js        ← 银行详情 (图表+卡片产品+季度数据)
+│       └── bank-compare.js       ← 银行对比 (雷达图+表格)
+├── scripts/                      ← Python 数据脚本
+├── supabase/migrations/          ← SQL 建表迁移
+└── docs/                         ← 文档
+```
+
+### 页面路由
+| 路由 | 页面 | 说明 |
+|------|------|------|
+| `#/` | Dashboard | Top排名 + 银行列表(可排序) + 扫描按钮 |
+| `#/bank/:id` | 银行详情 | 月度趋势+季度图表+**卡片产品+🔗来源** |
+| `#/compare` | 银行对比 | 任选2-4家银行并排对比 |
+
+---
+
+## 七、Phase 4A — 卡片产品 (已完成)
+
+**200 张卡 · 13 家银行 · 全 Network 识别**
+
+| 银行 | Code | 卡片 | Visa | MC | JCB | Other |
+|------|------|------|------|-----|-----|-------|
+| 玉山银行 | 808 | 56 | 40 | 15 | 1 | - |
+| 远东银行 | 805 | 27 | 21 | 6 | - | - |
+| 台新银行 | 812 | 20 | 14 | 6 | - | - |
+| 永丰银行 | 807 | 18 | 11 | 7 | - | - |
+| 渣打银行 | 052 | 13 | 7 | 6 | - | - |
+| 中小企银 | 050 | 12 | 4 | 8 | - | - |
+| 兆丰银行 | 017 | 10 | 4 | 6 | - | - |
+| 国泰世华 | 013 | 9 | 4 | 5 | - | - |
+| 联邦银行 | 803 | 9 | 5 | 4 | - | - |
+| 汇丰银行 | 081 | 7 | 6 | 1 | - | - |
+| 乐天卡 | RC001 | 7 | 4 | - | 3 | - |
+| 新光银行 | 102 | 6 | 5 | 1 | - | - |
+| 王道银行 | 048 | 6 | 2 | 3 | - | 1 (银联) |
+
+**Network 总计**: Visa 141 (70.5%) · MC 52 (26%) · JCB 6 (3%) · UnionPay 1
+
+**策略**: 文本页+DeepSeek 分析 · API拦截(新光) · 规则+AI 批量识别 Network
+
+---
+
+## 八、Phase 4B — RFP 洞察引擎 (✅ 已完成)
+
+### 目标
+结合金管局趋势数据 + 卡片产品信息，自动生成 RFP 卖点提示
+
+### 示例洞察
+- 联名卡 > 10张 → "碎片化严重，推 Vision Next 参数化能力"
+- 有效卡率下降 → "促活需求，卖 Loyalty/Campaign 模块"
+- 循环信用高 → "风控/催收需求，卖 Collections 接口"
+
+### 数据需求
+- `insights` 表已有 schema，需填充数据
+- 结合 `monthly_credit_stats` 趋势 + `card_products` 产品组合
+
+---
+
+## 九、已知限制
+
+| 限制 | 应对 |
+|------|------|
+| SPA 银行无法自动爬取 | 标记为跳过，需手动浏览器访问 |
+| Network 识别依赖 AI 推断 | 非官方数据，定性分析参考 |
+| GitHub Actions 免费额度 2000min/月 | 月度触发绰绰有余 |
+| NPL 季度数据仅到 2022 年 | find_zips_npl 正则需更新 |
+
+---
+
+## 十、民国/公元对照
+
+| 民国 | 公元 |
+|------|------|
+| 113年 | 2024年 |
+| 114年 | 2025年 |
+| 115年 | 2026年 |
+
+前端同时显示两种记年法 (如 `115/05 → 2026.05`)

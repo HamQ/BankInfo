@@ -1,0 +1,34 @@
+# ============================================================
+# RFP 洞察生成
+#
+# 📋 手动触发: https://github.com/HamQ/BankInfo/actions/workflows/gen_insights.yml
+# ⏱️  运行时间: ~1 分钟
+# ============================================================
+
+name: RFP 洞察生成
+
+on:
+  workflow_dispatch:
+
+jobs:
+  insights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: pip install -r scripts/requirements.txt
+
+      - name: 生成洞察
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/generate_insights.py

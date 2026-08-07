@@ -69,6 +69,7 @@ const BankDetail = {
             <span v-if="p.is_cobrand" class="p-tag">联名: {{ p.co_brand_partner }}</span>
           </div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:4px" v-if="p.key_benefits">{{ p.key_benefits?.substring(0, 80) }}{{ p.key_benefits?.length > 80 ? '...' : '' }}</div>
+          <div style="font-size:11px;margin-top:4px" v-if="p.source_page"><a :href="p.source_page" target="_blank" style="color:var(--accent);text-decoration:none">🔗 来源</a></div>
         </div>
       </div>
     </div>

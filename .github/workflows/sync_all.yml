@@ -1,0 +1,65 @@
+# ============================================================
+# 一键全量更新 — 串联所有数据同步 + 洞察生成
+#
+# 📋 手动触发方式:
+#   1. 打开 https://github.com/HamQ/BankInfo/actions/workflows/sync_all.yml
+#   2. 点击 "Run workflow"
+#   3. 点击绿色 "Run workflow" 确认执行
+#
+# ⏱️  运行时间: ~15-25 分钟
+# ============================================================
+name: 全量数据更新 (月度+季度+卡片+洞察)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          pip install -r scripts/requirements.txt
+          pip install playwright
+          python -m playwright install chromium --with-deps
+
+      - name: 1/5 同步信用卡月报
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/fetch_credit_stats.py
+
+      - name: 2/5 同步现金卡月报
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/fetch_cash_stats.py
+
+      - name: 3/5 同步季度数据
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/fetch_quarterly.py
+
+      - name: 4/5 爬取卡片产品
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python scripts/card_crawler.py
+
+      - name: 5/5 生成 RFP 洞察
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/generate_insights.py
