@@ -1,0 +1,55 @@
+# ============================================================
+# 信用卡产品爬虫 - AI Powered by DeepSeek
+#
+# 📋 手动触发方式:
+#   1. 打开 https://github.com/HamQ/BankInfo/actions/workflows/card_crawl.yml
+#   2. 点击右侧 Run workflow 按钮
+#   3. 可选: 填入银行代码 (逗号分隔, 如 013,808,812), 留空=全部银行
+#   4. 点击绿色 Run workflow 确认执行
+#
+# ⏱️  运行时间: ~5-15 分钟 (视银行数量)
+# 💡 本地运行: python scripts/card_crawler.py [银行代码...]
+#    需要: Playwright + Chromium (pip install playwright && playwright install chromium)
+# ============================================================
+
+name: 信用卡产品爬虫 (AI-Powered)
+
+on:
+  workflow_dispatch:
+    inputs:
+      banks:
+        description: '银行代码 (逗号分隔, 留空=全部)'
+        required: false
+        default: ''
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          pip install -r scripts/requirements.txt
+          pip install playwright
+          python -m playwright install chromium --with-deps
+
+      - name: 爬取卡片产品
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          if [ -z "${{ github.event.inputs.banks }}" ]; then
+            python scripts/card_crawler.py
+          else
+            python scripts/card_crawler.py ${{ github.event.inputs.banks }}
+          fi
