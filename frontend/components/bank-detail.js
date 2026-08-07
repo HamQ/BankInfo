@@ -201,7 +201,7 @@ const BankDetail = {
       chart.on('click', function(params) {
         if (params.dataIndex != null && allStats.value[params.dataIndex]) {
           var src = allStats.value[params.dataIndex].source_url
-          if (src) window.open(src, '_blank')
+          if (src) window.open(src.replace('.zip','.pdf'), '_blank')
         }
       })
     }
@@ -284,7 +284,7 @@ const BankDetail = {
 
     const sourcePdfUrl = Vue.computed(() => {
       const src = latest.value?.source_url
-      return src ? src : ''
+      return src ? src.replace('.zip','.pdf') : ''
     })
 
     return {

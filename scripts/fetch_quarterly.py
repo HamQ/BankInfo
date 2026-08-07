@@ -310,7 +310,7 @@ def run_source(supabase, cfg, name_to_id):
                 record = {
                     "bank_id": bid,
                     "report_quarter": pq_str,
-                    "source_url": zurl.replace(".zip", ".pdf"),
+                    "source_url": zurl,
                 }
                 if "digital" in table:
                     record.update({
