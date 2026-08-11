@@ -18,7 +18,7 @@
 | **Supabase URL** | `https://hpuatpbfbfxeyljfbjgs.supabase.co` |
 | **Supabase Anon Key** | `eyJhbGci...oyeb-8` (公开读取) |
 | **Supabase Service Key** | `eyJhbGci...H85ChY` (写入, 保密!) |
-| **DeepSeek API Key** | `sk-xxxx-REDACTED-ROTATED` (保密!) |
+| **DeepSeek API Key** | `sk-xxxx (见 .env 或 GitHub Secrets)` (保密!) |
 | **GitHub Pages** | `https://hamq.github.io/BankInfo/` |
 | **GitHub Repo** | `https://github.com/HamQ/BankInfo` |
 | **数据源** | 金管局 banking.gov.tw |
@@ -108,7 +108,7 @@
 ```powershell
 # 环境变量 (cmd)
 set SUPABASE_URL=https://hpuatpbfbfxeyljfbjgs.supabase.co
-set SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+set SUPABASE_SERVICE_KEY=eyJhbG... (见 .env 或 GitHub Secrets)
 
 # 安装依赖
 pip install -r scripts/requirements.txt
@@ -217,3 +217,74 @@ BankInfo/
 | 115年 | 2026年 |
 
 前端同时显示两种记年法 (如 `115/05 → 2026.05`)
+
+---
+
+## 十一、Phase 5 — Firecrawl + DeepSeek 卡片爬取 (WIP)
+
+**2026-08-11 · API Key: `fc-xxxx (见 .env 或 GitHub Secrets)` · Free 1000页/月**
+
+### 技术栈
+- Firecrawl `/v1/scrape` — JS渲染, Bot检测绕过, Markdown提取
+- DeepSeek Chat — AI提取卡片名称/Network/等级/联名/年费
+- Supabase `card_products` 表 — 结构化存储
+
+### 已完成银行 (15家, 222张卡)
+| 银行 | Code | 卡片 | 方式 |
+|------|------|------|------|
+| 玉山银行 | 808 | 56 | Playwright |
+| 远东银行 | 805 | 27 | Playwright |
+| 台新银行 | 812 | 20 | Playwright |
+| 永丰银行 | 807 | 18 | Playwright |
+| 渣打银行 | 052 | 13 | Playwright |
+| 凯基银行 | 809 | 13 | Firecrawl+DS |
+| 中小企银 | 050 | 12 | Playwright |
+| 兆丰银行 | 017 | 10 | Playwright |
+| 国泰世华 | 013 | 9 | Playwright |
+| 联邦银行 | 803 | 9 | Playwright |
+| 第一银行 | 007 | 9 | Firecrawl+DS |
+| 汇丰银行 | 081 | 7 | Playwright |
+| 乐天卡 | RC001 | 7 | Playwright |
+| 新光银行 | 102 | 6 | Playwright |
+| 王道银行 | 048 | 6 | Playwright |
+
+### 待完成银行 (23家)
+| 类型 | 银行 | 阻挡原因 |
+|------|------|----------|
+| 🔒 SPA重度 | 012 富邦 · 004 臺銀 · 011 上海 · 822 CTBC · 星展810 · 021花旗(已退) | JS全渲染, Firecrawl返回导航栏 |
+| 📄 导航型 | 005 土银 · 006 合库 · 008 华银 · 009 彰银 | 页面是导航目录, 非卡片列表 |
+| 🕸️ 未测试 | 016 高雄 · 053 台中 · 101 华泰 · 103 阳信 · 108 三信 · 806 元大 · 815 安泰 · 054 京城 · 118 板信 · AE001 运通 · NB01/02/03 纯网银 | 待浏览器验证URL |
+
+### 核心脚本
+| 文件 | 作用 |
+|------|------|
+| `scripts/card_firecrawl.py` | Firecrawl → DeepSeek → Supabase 主流程 |
+| `scripts/card_crawler.py` | 旧 Playwright 方案 (13家已跑) |
+| `.github/workflows/card_firecrawl.yml` | GitHub Action (手动触发, 需要 FIRECRAWL_API_KEY) |
+| `supabase/migrations/004_card_products_unique.sql` | ⚠️ 待执行: UNIQUE约束 (bank_id, name) |
+
+### 环境变量
+```powershell
+$env:FIRECRAWL_API_KEY="fc-xxxx (见 .env 或 GitHub Secrets)"
+$env:DEEPSEEK_API_KEY="sk-xxxx (见 .env 或 GitHub Secrets)"
+$env:SUPABASE_URL="https://hpuatpbfbfxeyljfbjgs.supabase.co"
+$env:SUPABASE_SERVICE_KEY="eyJhbG... (见 .env 或 GitHub Secrets)"
+```
+
+### GitHub Secrets (已配置)
+- `SUPABASE_URL` ✅
+- `SUPABASE_SERVICE_KEY` ✅
+- `DEEPSEEK_API_KEY` ✅
+- `FIRECRAWL_API_KEY` ✅
+
+### 手动触发
+```powershell
+# 仅跑特定银行
+python scripts/card_firecrawl.py 005 006 008 009
+
+# 跑全部待处理银行
+python scripts/card_firecrawl.py
+```
+
+或者通过 GitHub Actions: `https://github.com/HamQ/BankInfo/actions/workflows/card_firecrawl.yml` → Run workflow
+
