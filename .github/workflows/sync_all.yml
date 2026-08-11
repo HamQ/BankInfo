@@ -6,7 +6,8 @@
 #   2. 点击 "Run workflow"
 #   3. 点击绿色 "Run workflow" 确认执行
 #
-# ⏱️  运行时间: ~15-25 分钟
+# ⏱️  运行时间: ~10-20 分钟
+# 💡 包含: 信用卡月报 → 现金卡月报 → 季度数据 → 卡片爬虫 → RFP洞察
 # ============================================================
 name: 全量数据更新 (月度+季度+卡片+洞察)
 
@@ -28,10 +29,7 @@ jobs:
           python-version: "3.12"
 
       - name: 安装依赖
-        run: |
-          pip install -r scripts/requirements.txt
-          pip install playwright
-          python -m playwright install chromium --with-deps
+        run: pip install -r scripts/requirements.txt
 
       - name: 1/5 同步信用卡月报
         env:
@@ -51,12 +49,13 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/fetch_quarterly.py
 
-      - name: 4/5 爬取卡片产品
+      - name: 4/5 爬取卡片产品 (Firecrawl + DeepSeek)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: python scripts/card_crawler.py
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+        run: python scripts/card_firecrawl.py --backend auto
 
       - name: 5/5 生成 RFP 洞察
         env:

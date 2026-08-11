@@ -1,3 +1,5 @@
+# ⚠️ DEPRECATED - 请使用 card_firecrawl.py 代替 (Firecrawl + crawl4ai fallback)
+# 此脚本保留作参考，不再维护。Bank URLs 已过时。
 # -*- coding: utf-8 -*-
 """Phase 4A - Credit Card Crawler with Playwright + DeepSeek"""
 import os, sys, re, io, json
