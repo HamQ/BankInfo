@@ -2,9 +2,23 @@
 """Phase 5 - Card Crawler powered by Firecrawl + DeepSeek
 Replaces Playwright-based card_crawler.py for banks that need JS rendering.
 Firecrawl handles: SPA rendering, bot detection, proxy rotation.
+crawl4ai is used as a local fallback when Firecrawl returns insufficient content.
+
+Usage:
+  # Firecrawl only (default):
+  python scripts/card_firecrawl.py
+
+  # Prefer crawl4ai:
+  python scripts/card_firecrawl.py --backend crawl4ai
+
+  # Firecrawl + crawl4ai fallback:
+  python scripts/card_firecrawl.py --backend auto
+
+  # Target specific banks:
+  python scripts/card_firecrawl.py 004 011 810
 """
-import os, sys, io, json, time, requests
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+import os, sys, io, json, time, requests, argparse, asyncio
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 from supabase import create_client
 
 FIRECRAWL_KEY = os.environ.get("FIRECRAWL_API_KEY", "")
@@ -12,20 +26,20 @@ DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 FIRECRAWL_URL = "https://api.firecrawl.dev/v1/scrape"
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 
+# Minimum chars of scraped content to consider success
+MIN_CONTENT_LENGTH = 300
+
 SYS_PROMPT = """You are a credit card product analyst. Extract ALL credit cards from the markdown text.
 Return ONLY a JSON array. Each element must have these fields:
 {"name":"card Chinese name","network":"Visa|Mastercard|JCB|AmericanExpress|UnionPay|null",
 "card_level":"Platinum|World|Infinite|Signature|Titanium|Classic|Gold|Standard|null",
+"card_type":"personal|corporate|either",
 "is_cobrand":true|false,"co_brand_partner":"name or null",
 "key_benefits":"brief benefits summary in Chinese","annual_fee":"fee or null"}
 Return only JSON array, no markdown. [] if no cards found."""
 
 # Complete bank URL mapping - curated from manual browsing + firecrawl search
 BANK_URLS = {
-    # Phase 4A banks already scraped (skip if already have data)
-    # "013": "国泰", "017": "兆丰", etc. - already in DB
-
-    # Banks previously blocked by Playwright - NOW WORKING WITH FIRECRAWL
     "004": "https://ecard.bot.com.tw/Pages/Cards/P10.html",
     "005": "https://www.landbank.com.tw/Category/Bulletins/%E4%BF%A1%E7%94%A8%E5%8D%A1%E6%9C%80%E6%96%B0%E6%B6%88%E6%81%AF",
     "006": "https://www.tcb-bank.com.tw/personal-banking/credit-card/intro/overview",
@@ -35,7 +49,7 @@ BANK_URLS = {
     "011": "https://www.scsb.com.tw/content/card",
     "012": "https://www.fubon.com/banking/personal/credit_card/all_card/all_card.htm",
     "016": "https://www.bok.com.tw/personal/credit-card/",
-    "021": "https://www.citibank.com.tw/credit-cards/",  # 花旗已退出台湾，可能失效
+    "021": "https://www.citibank.com.tw/credit-cards/",
     "053": "https://www.tcbbank.com.tw/CreditCard/J_01.html",
     "054": "https://www.ktb.com.tw/personal/credit-card/",
     "101": "https://www.hwataibank.com.tw/personal/card01-01-01/",
@@ -53,8 +67,11 @@ BANK_URLS = {
     "NB03": "https://www.card.rakuten.com.tw/",
 }
 
+
+# ============ Firecrawl backend ============
+
 def firecrawl_scrape(url, timeout=90):
-    """Scrape a URL using Firecrawl API, return clean markdown."""
+    """Scrape a URL using Firecrawl API, return clean markdown and source URL."""
     payload = {
         "url": url,
         "formats": ["markdown"],
@@ -69,13 +86,68 @@ def firecrawl_scrape(url, timeout=90):
         resp = requests.post(FIRECRAWL_URL, json=payload, headers=headers, timeout=120)
         data = resp.json()
         if data.get("success"):
-            return data.get("data", {}).get("markdown", "")
+            md = data.get("data", {}).get("markdown", "")
+            return md, url
         else:
             print(f"    Firecrawl failed: {str(data)[:200]}")
-            return ""
+            return "", url
     except Exception as e:
         print(f"    Firecrawl error: {e}")
-        return ""
+        return "", url
+
+
+# ============ crawl4ai backend ============
+
+def _crawl4ai_scrape_sync(url, wait_for=None, timeout=60):
+    """Synchronous wrapper around crawl4ai AsyncWebCrawler.
+    Uses crawl4ai to render JS pages with Playwright under the hood.
+    Returns (markdown_text, source_url).
+    """
+    try:
+        # Import inside function so crawl4ai is optional
+        from crawl4ai import AsyncWebCrawler
+
+        async def _do_crawl():
+            async with AsyncWebCrawler(verbose=False) as crawler:
+                kwargs = {"url": url, "timeout": timeout * 1000}
+                if wait_for:
+                    kwargs["wait_for"] = wait_for
+                result = await crawler.arun(**kwargs)
+                if result and result.success:
+                    return result.markdown or result.html or ""
+                else:
+                    error_msg = getattr(result, "error_message", "unknown") if result else "no result"
+                    print(f"    crawl4ai failed: {error_msg[:200]}")
+                    return ""
+
+        # Try to get or create event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # We are inside an async context, run in a nested loop
+            import nest_asyncio
+            nest_asyncio.apply()
+            return loop.run_until_complete(_do_crawl()), url
+        except RuntimeError:
+            # No running loop, create one
+            return asyncio.run(_do_crawl()), url
+
+    except ImportError:
+        print(f"    crawl4ai not installed, skipping fallback")
+        return "", url
+    except Exception as e:
+        print(f"    crawl4ai error: {e}")
+        return "", url
+
+
+def crawl4ai_scrape(url, wait_for=None, timeout=60):
+    """Scrape a URL using crawl4ai (local Playwright-based).
+    Returns (markdown_text, source_url).
+    """
+    print(f"    Trying crawl4ai (local browser)...")
+    return _crawl4ai_scrape_sync(url, wait_for=wait_for, timeout=timeout)
+
+
+# ============ DeepSeek extraction ============
 
 def deepseek_extract(markdown):
     """Send markdown to DeepSeek to extract card products."""
@@ -100,6 +172,7 @@ def deepseek_extract(markdown):
         print(f"    DeepSeek error: {e}")
         return "[]"
 
+
 def parse_json(raw):
     """Clean and parse DeepSeek JSON output."""
     clean = raw.strip()
@@ -115,10 +188,29 @@ def parse_json(raw):
     except:
         return []
 
+
+# ============ Main ============
+
 def main():
-    if not FIRECRAWL_KEY:
-        print("ERROR: Set FIRECRAWL_API_KEY env var")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Scrape bank credit card products")
+    parser.add_argument("banks", nargs="*", help="Bank codes to process (default: all)")
+    parser.add_argument("--backend", default="auto",
+                        choices=["auto", "firecrawl", "crawl4ai"],
+                        help="Scraping backend: auto (firecrawl then crawl4ai fallback), firecrawl only, crawl4ai only")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-scrape even if bank already has cards in DB")
+    args = parser.parse_args()
+
+    backend = args.backend
+
+    if backend in ("auto", "firecrawl") and not FIRECRAWL_KEY:
+        if backend == "firecrawl":
+            print("ERROR: Set FIRECRAWL_API_KEY env var")
+            sys.exit(1)
+        else:
+            print("WARNING: No FIRECRAWL_API_KEY set, switching to crawl4ai-only mode")
+            backend = "crawl4ai"
+
     if not DEEPSEEK_KEY:
         print("ERROR: Set DEEPSEEK_API_KEY env var")
         sys.exit(1)
@@ -135,8 +227,11 @@ def main():
     banks_resp = s.table("banks").select("id,code,name").execute()
     banks = {b["code"]: b for b in banks_resp.data}
 
-    # Only process banks NOT in BANK_URLS.keys() if args provided
-    target_codes = sys.argv[1:] if len(sys.argv) > 1 else list(BANK_URLS.keys())
+    # Show backend mode
+    print(f"Backend mode: {backend}")
+    print(f"Banks to process: {len(args.banks) if args.banks else 'ALL'}")
+
+    target_codes = args.banks if args.banks else list(BANK_URLS.keys())
 
     total_inserted = 0
     for code in target_codes:
@@ -151,21 +246,42 @@ def main():
             continue
 
         # Check existing cards
-        existing = s.table("card_products").select("count", count="exact").eq("bank_id", bank["id"]).execute()
-        if existing.count > 0:
-            print(f"\n{code} ({bank['name']}): already has {existing.count} cards, skipping")
-            continue
+        if not args.force:
+            existing = s.table("card_products").select("count", count="exact").eq("bank_id", bank["id"]).execute()
+            if existing.count > 0:
+                print(f"\n{code} ({bank['name']}): already has {existing.count} cards, skipping")
+                continue
 
         print(f"\n=== {bank['name']} ({code}) ===")
         print(f"  URL: {url}")
 
-        # Step 1: Firecrawl scrape
-        print(f"  Scraping with Firecrawl...")
-        md = firecrawl_scrape(url)
-        if not md or len(md) < 500:
+        # Step 1: Scrape (with fallback chain)
+        md = ""
+        source_url = url
+
+        if backend == "crawl4ai":
+            # crawl4ai only
+            print(f"  Scraping with crawl4ai...")
+            md, source_url = crawl4ai_scrape(url)
+        elif backend == "firecrawl":
+            # Firecrawl only
+            print(f"  Scraping with Firecrawl...")
+            md, source_url = firecrawl_scrape(url)
+        else:
+            # Auto: Firecrawl first, crawl4ai fallback
+            print(f"  Scraping with Firecrawl...")
+            md, source_url = firecrawl_scrape(url)
+            if not md or len(md) < MIN_CONTENT_LENGTH:
+                print(f"  Firecrawl returned {len(md)} chars (< {MIN_CONTENT_LENGTH}), falling back to crawl4ai...")
+                md2, _ = crawl4ai_scrape(url)
+                if md2 and len(md2) > len(md):
+                    md = md2
+                    source_url = url  # crawl4ai uses the original URL
+
+        if not md or len(md) < MIN_CONTENT_LENGTH:
             print(f"  SKIP: no content ({len(md)} chars)")
             continue
-        print(f"  Got {len(md)} chars of markdown")
+        print(f"  Got {len(md)} chars of content")
 
         # Step 2: DeepSeek analysis
         print(f"  Analyzing with DeepSeek...")
@@ -174,9 +290,12 @@ def main():
 
         if not cards:
             # Save sample markdown for debugging
-            dbg_file = f"scripts/_debug_{code}.md"
+            dbg_dir = "scripts"
+            os.makedirs(dbg_dir, exist_ok=True)
+            dbg_file = os.path.join(dbg_dir, f"_debug_{code}.md")
             try:
                 with open(dbg_file, "w", encoding="utf-8") as f:
+                    f.write(f"<!-- Source: {source_url} -->\n")
                     f.write(md[:10000])
             except:
                 pass
@@ -197,7 +316,7 @@ def main():
                 "co_brand_partner": card.get("co_brand_partner"),
                 "key_benefits": str(card.get("key_benefits", ""))[:200],
                 "annual_fee": card.get("annual_fee"),
-                "source_page": url,
+                "source_page": source_url,
             }
             try:
                 # Check if already exists
@@ -221,6 +340,7 @@ def main():
     print(f"\n{'='*50}")
     print(f"TOTAL: {total_inserted} new cards inserted")
     print(f"DONE")
+
 
 if __name__ == "__main__":
     main()

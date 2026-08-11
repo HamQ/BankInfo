@@ -355,7 +355,12 @@ const BankDetail = {
       const src = latest.value?.source_url
       return src ? src.replace('.zip','.pdf') : ''
     })
-
+    // typeLabel helper for card_type display
+    const TYPE_LABELS = { personal: '👤 个人', business: '🏢 商务', cobrand: '🤝 联名', debit: '💳 签帐', commercial: '💼 企业', corporate: '🏢 企业' }
+    function typeLabel(cardType) {
+      if (!cardType || cardType === 'personal') return ''
+      return TYPE_LABELS[cardType] || cardType
+    }
     return {
       bank, latest, allStats, products, bankInsights, digitalData, nplData, activeChart, productFilter, typeFilter, productSearch, productSort, networkCounts, typeCounts, filteredProducts,
       latestMonth, trendChange, trendDir, sourcePdfUrl,
