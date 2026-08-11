@@ -67,6 +67,13 @@ const BankDetail = {
         <span v-for="n in networkCounts" :key="n.name" class="p-tag" :class="n.name.toLowerCase()" style="cursor:pointer" :style="productFilter===n.name?{opacity:1,outline:'2px solid var(--accent)'}:{opacity:0.5}" @click="productFilter = (productFilter===n.name ? '' : n.name)">{{ n.name }} {{ n.count }}</span>
       </div>
 
+      <!-- 卡种快速筛选标签 -->
+      <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
+        <span v-for="t in typeCounts" :key="t.name" class="p-tag" style="cursor:pointer;font-size:11px" :style="typeFilter===t.name?{opacity:1,outline:'2px solid var(--accent)'}:{opacity:0.6}" @click="typeFilter=(typeFilter===t.name?'':t.name)">
+          {{ t.label }} {{ t.count }}
+        </span>
+      </div>
+
       <!-- 搜索 + 排序 -->
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <input v-model="productSearch" placeholder="🔍 搜索卡片名称..." style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);flex:1;min-width:150px;font-size:13px">
@@ -81,6 +88,7 @@ const BankDetail = {
           <div class="p-name">{{ p.name }}</div>
           <div class="p-tags">
             <span v-if="p.network" class="p-tag" :class="p.network.toLowerCase()">{{ p.network }}</span>
+            <span v-if="p.card_type && p.card_type!=='personal'" class="p-tag" style="background:var(--accent);color:white">{{ typeLabel(p.card_type) }}</span>
             <span v-if="p.card_level" class="p-tag">{{ p.card_level }}</span>
             <span v-if="p.is_cobrand" class="p-tag">联名: {{ p.co_brand_partner }}</span>
           </div>
@@ -131,10 +139,21 @@ const BankDetail = {
     const bankInsights = Vue.ref([])
     const digitalData = Vue.ref([])
     const productFilter = Vue.ref('')
+    const typeFilter = Vue.ref('')
     const productSearch = Vue.ref('')
     const productSort = Vue.ref('name')
     const nplData = Vue.ref([])
     const activeChart = Vue.ref('cards')
+
+    const typeCounts = Vue.computed(() => {
+      const counts = {}
+      products.value.forEach(p => {
+        const t = p.card_type || 'personal'
+        counts[t] = (counts[t] || 0) + 1
+      })
+      const labels = { personal:'👤 个人', business:'🏢 商务', cobrand:'🤝 联名', debit:'💳 签帐', commercial:'💼 企业' }
+      return Object.entries(counts).map(([name, count]) => ({ name, label: labels[name] || name, count })).sort((a,b) => b.count - a.count)
+    })
 
     const networkCounts = Vue.computed(() => {
       const counts = {}
@@ -149,6 +168,9 @@ const BankDetail = {
       let list = [...products.value]
       if (productFilter.value) {
         list = list.filter(p => (p.network || 'Unknown') === productFilter.value)
+      }
+      if (typeFilter.value) {
+        list = list.filter(p => (p.card_type || 'personal') === typeFilter.value)
       }
       if (productSearch.value) {
         const q = productSearch.value.toLowerCase()
@@ -335,9 +357,10 @@ const BankDetail = {
     })
 
     return {
-      bank, latest, allStats, products, bankInsights, digitalData, nplData, activeChart, productFilter, productSearch, productSort, networkCounts, filteredProducts,
+      bank, latest, allStats, products, bankInsights, digitalData, nplData, activeChart, productFilter, typeFilter, productSearch, productSort, networkCounts, typeCounts, filteredProducts,
       latestMonth, trendChange, trendDir, sourcePdfUrl,
-      fmtNumber, fmtAmount, fmtPercent
+      fmtNumber, fmtAmount, fmtPercent, typeLabel
     }
   }
 }
+
