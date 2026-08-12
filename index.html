@@ -4,6 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>台灣銀行卡片資訊</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" type="image/svg+xml" href="icon.svg"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="銀行卡片"/>
+<meta name="theme-color" content="#4f46e5"/>
 <link rel="stylesheet" href="frontend/styles/main.css?v=202608121022"/>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
@@ -18,5 +25,10 @@
 <script src="frontend/components/bank-detail.js?v=202608121021"></script>
 <script src="frontend/components/bank-compare.js?v=202608121021"></script>
 <script src="frontend/app.js?v=202608121021"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").then(r => console.log("SW registered", r.scope)).catch(e => console.log("SW failed", e));
+}
+</script>
 </body>
 </html>

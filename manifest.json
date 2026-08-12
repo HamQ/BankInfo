@@ -1,0 +1,16 @@
+{
+  "name": "台灣銀行卡片資訊",
+  "short_name": "銀行卡片",
+  "description": "台灣銀行信用卡市場資料儀表板 — 監控金管局公開資料與各銀行卡種產品",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "lang": "zh-TW",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
