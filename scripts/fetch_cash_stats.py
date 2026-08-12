@@ -118,7 +118,7 @@ def upsert(supabase, rm, rows, src, c2i):
     return n
 
 def main():
-    print("🏦 台湾银行卡片信息 - 现金卡月报同步 v2")
+    print("台湾银行卡片资讯 - 现金卡月报同步 v2")
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:
