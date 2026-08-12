@@ -14,7 +14,7 @@ const app = Vue.createApp({
   template: `
   <div>
     <nav class="navbar">
-      <h1>台湾銀行卡片資訊</h1>
+      <h1>台灣銀行卡片資訊</h1>
       <div class="nav-links">
         <router-link to="/" active-class="active" exact>總覽</router-link>
         <router-link to="/compare" active-class="active">銀行對比</router-link>

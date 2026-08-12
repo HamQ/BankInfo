@@ -96,7 +96,7 @@ const BankDetail = {
           <div style="font-size:11px;margin-top:4px" v-if="p.source_page"><a :href="p.source_page" target="_blank" style="color:var(--accent);text-decoration:none">🔗 來源</a></div>
         </div>
       </div>
-      <div v-if="!filteredProducts.length" style="text-align:center;padding:20px;color:var(--text-muted)">没有匹配的卡片</div>
+      <div v-if="!filteredProducts.length" style="text-align:center;padding:20px;color:var(--text-muted)">沒有匹配的卡片</div>
     </div>
 
     <!-- 数位存款帐户 (季度) -->
