@@ -14,13 +14,13 @@ const app = Vue.createApp({
   template: `
   <div>
     <nav class="navbar">
-      <h1>🏦 台湾信用卡情报雷达</h1>
+      <h1>🏦 🏦 台湾銀行卡片資訊</h1>
       <div class="nav-links">
-        <router-link to="/" active-class="active" exact>总览</router-link>
-        <router-link to="/compare" active-class="active">银行对比</router-link>
+        <router-link to="/" active-class="active" exact>總覽</router-link>
+        <router-link to="/compare" active-class="active">銀行對比</router-link>
       </div>
       <div class="nav-right">
-        数据源: 金管会银行局 · 最后更新: {{ lastUpdate || "加载中..." }}
+        資料來源: 金管會銀行局 · 最後更新: {{ lastUpdate || "載入中..." }}
       </div>
     </nav>
     <div class="container">

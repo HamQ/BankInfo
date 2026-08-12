@@ -157,7 +157,7 @@ def upsert_month(supabase: Client, report_month: date, rows: list, source_url: s
     return count
 
 def main():
-    print("台湾信用卡情报雷达 - 信用卡月报同步 v2")
+    print("🏦 台湾银行卡片信息 - 信用卡月报同步 v2")
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:

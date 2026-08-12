@@ -12,3 +12,7 @@ Thumbs.db
 *.tmp
 *.zip
 temp/
+
+# Never commit temp/secrets cleanup scripts
+_cleanup_secrets.py
+_index_filter.py

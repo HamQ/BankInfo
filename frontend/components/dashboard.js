@@ -1,10 +1,10 @@
 // ============================================
-// Dashboard 组件 — 首页总览 (信用卡 / 现金卡)
+// Dashboard 组件 — 首页總覽 (信用卡 / 现金卡)
 // ============================================
 const Dashboard = {
   template: `
   <div>
-    <!-- 类型切换 -->
+    <!-- 类型切換 -->
     <div class="tab-bar">
       <button class="tab-btn" :class="{active: cardType==='credit'}" @click="switchType('credit')">💳 信用卡</button>
       <button class="tab-btn" :class="{active: cardType==='cash'}" @click="switchType('cash')">💰 現金卡</button>
@@ -14,7 +14,7 @@ const Dashboard = {
     <template v-if="cardType==='credit'">
       <div class="rank-grid">
         <div class="rank-card">
-          <h3>🏆 信用卡流通卡数 Top 5</h3>
+          <h3>🏆 信用卡流通卡數 Top 5</h3>
           <div v-if="topCards.length">
             <div class="rank-item" v-for="(b, i) in topCards.slice(0,5)" :key="b.id">
               <span class="pos" :class="{gold:i===0,silver:i===1,bronze:i===2}">{{ i+1 }}</span>
@@ -22,10 +22,10 @@ const Dashboard = {
               <span class="val">{{ fmtNumber(b.cards_in_circulation) }}</span>
             </div>
           </div>
-          <div v-else class="loading">加载中...</div>
+          <div v-else class="loading">載入中...</div>
         </div>
         <div class="rank-card">
-          <h3>📈 信用卡签帐金额 Top 5</h3>
+          <h3>📈 信用卡簽帳金額 Top 5</h3>
           <div v-if="topVolume.length">
             <div class="rank-item" v-for="(b, i) in topVolume.slice(0,5)" :key="b.id">
               <span class="pos" :class="{gold:i===0,silver:i===1,bronze:i===2}">{{ i+1 }}</span>
@@ -47,14 +47,14 @@ const Dashboard = {
       </div>
 
       <div class="card">
-        <h2>💳 信用卡 — 全部银行一览 ({{ latestCreditMonth }})</h2>
+        <h2>💳 信用卡 — 全部銀行一览 ({{ latestCreditMonth }})</h2>
         <div class="filter-bar">
-          <input type="text" v-model="searchText" placeholder="搜索银行..." style="width:200px"/>
+          <input type="text" v-model="searchText" placeholder="搜尋銀行..." style="width:200px"/>
           <select v-model="sortKey">
-            <option value="cards_in_circulation">流通卡数</option>
+            <option value="cards_in_circulation">流通卡數</option>
             <option value="active_ratio">有效卡率</option>
-            <option value="transaction_volume">签帐金额</option>
-            <option value="revolving_balance">循环信用余额</option>
+            <option value="transaction_volume">簽帳金額</option>
+            <option value="revolving_balance">循環信用餘額</option>
           </select>
           <select v-model="sortDir">
             <option value="desc">降序</option>
@@ -64,12 +64,12 @@ const Dashboard = {
         <table>
           <thead>
             <tr>
-              <th style="width:180px">银行</th>
-              <th class="number" style="width:110px">流通卡数</th>
-              <th class="number" style="width:110px">有效卡数</th>
+              <th style="width:180px">銀行</th>
+              <th class="number" style="width:110px">流通卡數</th>
+              <th class="number" style="width:110px">有效卡數</th>
               <th class="number" style="width:110px">有效卡率</th>
-              <th class="number" style="width:130px">当月签帐金额</th>
-              <th class="number" style="width:130px">循环信用余额</th>
+              <th class="number" style="width:130px">當月簽帳金額</th>
+              <th class="number" style="width:130px">循環信用餘額</th>
               <th class="number" style="width:90px">逾期3M+</th>
             </tr>
           </thead>
@@ -104,7 +104,7 @@ const Dashboard = {
               <span class="val">{{ fmtNumber(b.drawn_cards) }}</span>
             </div>
           </div>
-          <div v-else class="loading">加载中...</div>
+          <div v-else class="loading">載入中...</div>
         </div>
         <div class="rank-card">
           <h3>📈 現金卡放款餘額 Top 5</h3>
@@ -129,11 +129,11 @@ const Dashboard = {
       </div>
 
       <div class="card">
-        <h2>💰 現金卡 — 全部银行一览 ({{ latestCashMonth }})</h2>
+        <h2>💰 現金卡 — 全部銀行一览 ({{ latestCashMonth }})</h2>
         <table>
           <thead>
             <tr>
-              <th style="width:150px">银行</th>
+              <th style="width:150px">銀行</th>
               <th class="number" style="width:110px">已動用卡數</th>
               <th class="number" style="width:110px">未動用卡數</th>
               <th class="number" style="width:130px">契約限額(千元)</th>
@@ -154,11 +154,11 @@ const Dashboard = {
             </tr>
           </tbody>
         </table>
-        <div v-if="cashStats.length === 0 && !loading" class="empty">暂无现金卡数据</div>
+        <div v-if="cashStats.length === 0 && !loading" class="empty">暂无现金卡資料</div>
       </div>
     </template>
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">載入中...</div>
   </div>`,
 
   setup() {
@@ -171,7 +171,7 @@ const Dashboard = {
     const loading = Vue.ref(true)
 
     async function loadCreditData() {
-      // 加载最新信用卡月报
+      // 載入最新信用卡月报
       const { data: statsData } = await supabase
         .from("monthly_credit_stats")
         .select("*, banks!inner(id, name, short_name)")

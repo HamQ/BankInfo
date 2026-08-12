@@ -4,7 +4,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-// 辅助：格式化金额（千元 NTD -> 亿元/万元）
+// 辅助：格式化金額（千元 NTD -> 亿元/万元）
 function fmtAmount(val) {
   if (val == null) return "-"
   if (val >= 100000) return (val / 100000).toFixed(1) + " 亿"

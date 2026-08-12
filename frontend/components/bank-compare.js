@@ -1,17 +1,17 @@
 // ============================================
-// BankCompare 组件 — 银行对比页 v2 (雷达图 + 趋势 + 指标表)
+// BankCompare 组件 — 銀行對比页 v2 (雷达图 + 趨勢 + 指標表)
 // ============================================
 const BankCompare = {
   template: `
   <div>
     <div class="card">
-      <h2>📊 银行对比</h2>
+      <h2>📊 銀行對比</h2>
       <div class="compare-selector">
         <select v-model="selectedBanks" multiple style="height:140px;min-width:260px">
           <option v-for="b in banks" :value="b.id" :key="b.id">{{ b.short_name || b.name }}</option>
         </select>
         <div style="font-size:11px;color:var(--text-muted);margin-left:12px">
-          <div>按住 Ctrl/Cmd 点击选择 2~4 家</div>
+          <div>按住 Ctrl/Cmd 點選選擇 2~4 家</div>
           <div style="margin-top:4px">已选: <b style="color:var(--accent)">{{ selectedBanks.length }}</b></div>
           <div v-if="selectedBanks.length > 4" style="color:var(--amber);margin-top:4px">建议不超过4家，雷达图更清晰</div>
         </div>
@@ -21,18 +21,18 @@ const BankCompare = {
     <template v-if="selectedBanks.length >= 2">
       <!-- 雷达图 -->
       <div class="card">
-        <h2>🎯 最新月份雷达对比</h2>
+        <h2>🎯 最新月份雷达對比</h2>
         <div class="chart-box" id="radar-chart" style="height:480px"></div>
       </div>
 
-      <!-- 指标对比表 -->
+      <!-- 指標對比表 -->
       <div class="card">
-        <h2>📋 关键指标一览 ({{ latestMonth }})</h2>
+        <h2>📋 关键指標一览 ({{ latestMonth }})</h2>
         <div style="overflow-x:auto">
           <table>
             <thead>
               <tr>
-                <th>指标</th>
+                <th>指標</th>
                 <th v-for="b in compareData" :key="b.bank_id" class="number">{{ b.name }}</th>
               </tr>
             </thead>
@@ -48,20 +48,20 @@ const BankCompare = {
         </div>
       </div>
 
-      <!-- 趋势对比 -->
+      <!-- 趨勢對比 -->
       <div class="card">
-        <h2>📈 历史趋势对比</h2>
+        <h2>📈 历史趨勢對比</h2>
         <div class="filter-bar">
-          <button class="btn" :class="cmpMetric==='cards' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='cards'">流通卡数</button>
+          <button class="btn" :class="cmpMetric==='cards' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='cards'">流通卡數</button>
           <button class="btn" :class="cmpMetric==='active' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='active'">有效卡率</button>
-          <button class="btn" :class="cmpMetric==='volume' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='volume'">签帐金额</button>
-          <button class="btn" :class="cmpMetric==='revolving' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='revolving'">循环信用余额</button>
+          <button class="btn" :class="cmpMetric==='volume' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='volume'">簽帳金額</button>
+          <button class="btn" :class="cmpMetric==='revolving' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='revolving'">循環信用餘額</button>
           <button class="btn" :class="cmpMetric==='risk' ? 'btn-primary' : 'btn-outline'" @click="cmpMetric='risk'">逾期3月+比率</button>
         </div>
         <div class="chart-box" id="trend-chart"></div>
       </div>
     </template>
-    <div v-else class="card empty">请选择至少 2 家银行进行对比</div>
+    <div v-else class="card empty">请選擇至少 2 家銀行进行對比</div>
   </div>`,
 
   setup() {
@@ -71,15 +71,15 @@ const BankCompare = {
     const compareData = Vue.ref([])
 
     const metricRows = Vue.computed(() => [
-      { key: 'cards_in_circulation', label: '流通卡数', fmt: v => v ? (v/10000).toFixed(0)+'万' : '-',
+      { key: 'cards_in_circulation', label: '流通卡數', fmt: v => v ? (v/10000).toFixed(0)+'万' : '-',
         style: b => ({}) },
-      { key: 'active_cards', label: '有效卡数', fmt: v => v ? (v/10000).toFixed(0)+'万' : '-',
+      { key: 'active_cards', label: '有效卡數', fmt: v => v ? (v/10000).toFixed(0)+'万' : '-',
         style: b => ({}) },
       { key: 'active_ratio', label: '有效卡率', fmt: v => v != null ? v.toFixed(1)+'%' : '-',
         style: b => b.active_ratio != null ? { color: b.active_ratio < 50 ? 'var(--red)' : b.active_ratio < 65 ? 'var(--amber)' : 'var(--green)' } : {} },
-      { key: 'transaction_volume', label: '当月签帐金额', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
+      { key: 'transaction_volume', label: '當月簽帳金額', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
         style: b => ({}) },
-      { key: 'revolving_balance', label: '循环信用余额', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
+      { key: 'revolving_balance', label: '循環信用餘額', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
         style: b => ({}) },
       { key: 'cash_advance_volume', label: '预借现金', fmt: v => v ? (v/1e8).toFixed(2)+'亿' : '-',
         style: b => ({}) },
@@ -87,7 +87,7 @@ const BankCompare = {
         style: b => b.delinquency_3m_ratio > 1 ? { color: 'var(--red)' } : b.delinquency_3m_ratio > 0.5 ? { color: 'var(--amber)' } : { color: 'var(--green)' } },
       { key: 'delinquency_6m_ratio', label: '逾期6月+比率', fmt: v => v != null ? v.toFixed(2)+'%' : '-',
         style: b => ({}) },
-      { key: 'bad_debt_coverage_ratio', label: '呆帐覆盖率', fmt: v => v != null ? v.toFixed(1)+'%' : '-',
+      { key: 'bad_debt_coverage_ratio', label: '呆帐覆蓋率', fmt: v => v != null ? v.toFixed(1)+'%' : '-',
         style: b => ({}) },
     ])
 
@@ -151,10 +151,10 @@ const BankCompare = {
       const chart = echarts.getInstanceByDom(el) || echarts.init(el)
 
       const metrics = [
-        { key: 'cards_in_circulation', label: '流通卡数', max: 1e7 },
+        { key: 'cards_in_circulation', label: '流通卡數', max: 1e7 },
         { key: 'active_ratio', label: '有效卡率', max: 100 },
-        { key: 'transaction_volume', label: '签帐金额', max: 1e10 },
-        { key: 'revolving_balance', label: '循环信用', max: 5e9 },
+        { key: 'transaction_volume', label: '簽帳金額', max: 1e10 },
+        { key: 'revolving_balance', label: '循環信用', max: 5e9 },
         { key: 'delinquency_3m_ratio', label: '逾期比率↓', max: 3, invert: true },
       ]
 
@@ -191,10 +191,10 @@ const BankCompare = {
       const chart = echarts.getInstanceByDom(el) || echarts.init(el)
 
       const metricMap = {
-        cards: { key: 'cards_in_circulation', name: '流通卡数' },
+        cards: { key: 'cards_in_circulation', name: '流通卡數' },
         active: { key: 'active_ratio', name: '有效卡率' },
-        volume: { key: 'transaction_volume', name: '签帐金额' },
-        revolving: { key: 'revolving_balance', name: '循环信用余额' },
+        volume: { key: 'transaction_volume', name: '簽帳金額' },
+        revolving: { key: 'revolving_balance', name: '循環信用餘額' },
         risk: { key: 'delinquency_3m_ratio', name: '逾期3月+比率' },
       }
       const m = metricMap[cmpMetric.value]
